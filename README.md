@@ -1,43 +1,52 @@
-<<<<<<< HEAD
-# TransferLAN+
+# TransferLAN+ v1.0.1-beta
 
-Sin cuentas. Sin nube. Sin cables.
+Primera beta ejecutable base.
 
-Beta pública v1.0.0.
-=======
-# TransferLAN+ v0.15.0
+## Qué incluye
 
-Transferencia local rápida entre Android, Windows y Linux.
+- Backend local en Go.
+- Servidor HTTP en `http://localhost:5050`.
+- Página web simple para probar.
+- Endpoint `/health`.
+- Endpoint `/devices`.
+- Endpoint `/transfer/upload`.
+- Carpeta `downloads/`.
+- Scripts para Windows y Linux.
 
-Sin cuentas. Sin nube. Sin cables. Sin vueltas.
+## Requisitos
 
-## Novedades v0.15.0
+Instalar Go:
 
-- Cola local de transferencias.
-- Base para múltiples envíos simultáneos.
-- Estados: pendiente, en progreso, completado, fallido y cancelado.
-- Endpoints `/queue`.
-- Cancelación de ítems.
-- Limpieza de transferencias finalizadas.
-- Documentación `docs/TRANSFER_QUEUE.md`.
+https://go.dev/dl/
 
-## Estado del proyecto
+## Ejecutar en Windows
 
-Ya incluye base para:
+Doble click en:
 
-- discovery LAN/mDNS;
-- emparejamiento PIN/QR base;
-- envío de archivos;
-- envío por bloques;
-- reanudar transferencias;
-- envío de carpetas como ZIP temporal;
-- modo invitado web;
-- drag & drop base;
-- historial;
-- notificaciones internas;
-- cola de transferencias.
+```bat
+run_windows.bat
+```
 
-## Próximo hito sugerido
+O desde consola:
 
-v0.16.0: limitar concurrencia real y pantalla de cola en Flutter.
->>>>>>> c7cf3e998c722a2659ae20dc885702aa471a8577
+```bat
+cd core\server
+go run .
+```
+
+Después abrir:
+
+```text
+http://localhost:5050
+```
+
+## Ejecutar en Linux
+
+```bash
+chmod +x run_linux.sh
+./run_linux.sh
+```
+
+## Estado
+
+Esta versión todavía no tiene app Android real ni Flutter compilado. Sirve para probar el primer receptor local desde navegador y preparar la base ejecutable.

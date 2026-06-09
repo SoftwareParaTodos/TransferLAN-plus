@@ -1,0 +1,19 @@
+name: transferlan_plus
+version: 0.13.0+1
+description: Transferencia local rápida entre Android, Windows y Linux.
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.2
+  file_picker: ^8.1.2
+  path: ^1.9.0
+  desktop_drop: ^0.5.0
+  cross_file: ^0.3.4
+
+flutter:
+  uses-material-design: true

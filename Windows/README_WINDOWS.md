@@ -1,0 +1,1 @@
+Estructura Windows preparada.

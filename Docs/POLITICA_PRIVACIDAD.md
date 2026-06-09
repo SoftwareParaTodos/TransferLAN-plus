@@ -1,0 +1,1 @@
+No usamos nube ni recopilamos tus archivos.

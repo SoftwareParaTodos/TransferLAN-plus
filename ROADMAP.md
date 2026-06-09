@@ -1,0 +1,1 @@
+Próximos pasos: beta testing, corrección de errores y versión final.

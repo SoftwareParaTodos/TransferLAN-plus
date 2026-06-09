@@ -1,0 +1,1 @@
+Abrí la aplicación, detectá dispositivos y transferí archivos.

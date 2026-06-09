@@ -1,52 +1,41 @@
-# TransferLAN+ v1.0.1-beta
+# TransferLAN+ v1.0.3-beta Android Sender
 
-Primera beta ejecutable base.
+Esta versión agrega una base Android para enviar archivos desde el celular a la PC por LAN.
 
-## Qué incluye
+## Qué trae
 
-- Backend local en Go.
-- Servidor HTTP en `http://localhost:5050`.
-- Página web simple para probar.
-- Endpoint `/health`.
-- Endpoint `/devices`.
-- Endpoint `/transfer/upload`.
-- Carpeta `downloads/`.
-- Scripts para Windows y Linux.
+- Proyecto Android nativo Kotlin.
+- Pantalla simple para cargar la IP de la PC.
+- Selector de archivos de Android.
+- Envío multipart a `/transfer/upload`.
+- Permiso de internet/red.
+- Guía para compilar APK desde Android Studio.
 
-## Requisitos
+## Requisitos para compilar
 
-Instalar Go:
+- Android Studio
+- JDK incluido con Android Studio
+- SDK Android instalado
 
-https://go.dev/dl/
+## Cómo usar
 
-## Ejecutar en Windows
-
-Doble click en:
-
-```bat
-run_windows.bat
-```
-
-O desde consola:
-
-```bat
-cd core\server
-go run .
-```
-
-Después abrir:
+1. Ejecutar TransferLAN+ en Windows.
+2. Ver la IP de la PC, por ejemplo:
 
 ```text
-http://localhost:5050
+192.168.1.45
 ```
 
-## Ejecutar en Linux
+3. Abrir la app Android.
+4. Poner:
 
-```bash
-chmod +x run_linux.sh
-./run_linux.sh
+```text
+http://192.168.1.45:5050
 ```
+
+5. Elegir archivo.
+6. Enviar.
 
 ## Estado
 
-Esta versión todavía no tiene app Android real ni Flutter compilado. Sirve para probar el primer receptor local desde navegador y preparar la base ejecutable.
+Beta inicial. Todavía no incluye detección automática mDNS desde Android ni QR.

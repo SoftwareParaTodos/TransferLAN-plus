@@ -1,41 +1,33 @@
-# TransferLAN+ v1.0.3-beta Android Sender
+# TransferLAN+ v1.0.6-beta Android Native Java
 
-Esta versión agrega una base Android para enviar archivos desde el celular a la PC por LAN.
+Versión Android simplificada para compilar APK en GitHub Actions sin Kotlin, AppCompat ni Material.
 
-## Qué trae
+## Objetivo
 
-- Proyecto Android nativo Kotlin.
-- Pantalla simple para cargar la IP de la PC.
-- Selector de archivos de Android.
-- Envío multipart a `/transfer/upload`.
-- Permiso de internet/red.
-- Guía para compilar APK desde Android Studio.
+Evitar errores de dependencias y generar un APK debug funcional.
 
-## Requisitos para compilar
+## Funciona así
 
-- Android Studio
-- JDK incluido con Android Studio
-- SDK Android instalado
-
-## Cómo usar
-
-1. Ejecutar TransferLAN+ en Windows.
-2. Ver la IP de la PC, por ejemplo:
-
-```text
-192.168.1.45
-```
-
-3. Abrir la app Android.
-4. Poner:
+1. Ejecutás TransferLAN+ en Windows.
+2. En Android ponés la URL de la PC:
 
 ```text
 http://192.168.1.45:5050
 ```
 
-5. Elegir archivo.
-6. Enviar.
+3. Elegís archivo.
+4. Enviás a `/transfer/upload`.
 
-## Estado
+## Compilar en GitHub
 
-Beta inicial. Todavía no incluye detección automática mDNS desde Android ni QR.
+Subí esta versión y entrá a:
+
+```text
+Actions → Build Android APK → Run workflow
+```
+
+Al terminar descargás el artifact:
+
+```text
+TransferLANPlus-v1.0.6-beta-debug-apk
+```

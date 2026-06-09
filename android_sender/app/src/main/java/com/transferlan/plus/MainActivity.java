@@ -1,197 +1,28 @@
 package com.transferlan.plus;
+import android.app.*;import android.os.*;import android.content.*;import android.net.*;import android.provider.*;import android.database.*;import android.view.*;import android.widget.*;import android.graphics.*;import java.io.*;import java.net.*;import java.util.*;
 
-import android.app.Activity;
-import android.os.Bundle;
-import android.content.Intent;
-import android.net.Uri;
-import android.provider.OpenableColumns;
-import android.database.Cursor;
-import android.view.Gravity;
-import android.widget.*;
-import android.graphics.Color;
-
-import java.io.DataOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-
-public class MainActivity extends Activity {
-    private static final int PICK_FILE = 1201;
-
-    private EditText urlInput;
-    private TextView statusText;
-    private Uri selectedUri;
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        buildUi();
-        handleSharedFile(getIntent());
-    }
-
-    @Override
-    protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        handleSharedFile(intent);
-    }
-
-    private void buildUi() {
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(32, 48, 32, 32);
-        layout.setGravity(Gravity.CENTER_HORIZONTAL);
-        layout.setBackgroundColor(Color.rgb(15, 23, 42));
-
-        TextView title = new TextView(this);
-        title.setText("TransferLAN+");
-        title.setTextSize(28);
-        title.setTextColor(Color.rgb(229, 231, 235));
-
-        TextView subtitle = new TextView(this);
-        subtitle.setText("Sin cuentas. Sin nube. Sin cables.");
-        subtitle.setTextSize(15);
-        subtitle.setTextColor(Color.rgb(56, 189, 248));
-        subtitle.setPadding(0, 0, 0, 28);
-
-        urlInput = new EditText(this);
-        urlInput.setHint("http://IP-DE-TU-PC:5050");
-        urlInput.setText("http://");
-        urlInput.setSingleLine(true);
-        urlInput.setTextColor(Color.rgb(229, 231, 235));
-        urlInput.setHintTextColor(Color.rgb(148, 163, 184));
-
-        Button pickButton = new Button(this);
-        pickButton.setText("Elegir archivo");
-        pickButton.setOnClickListener(v -> pickFile());
-
-        Button sendButton = new Button(this);
-        sendButton.setText("Enviar a la PC");
-        sendButton.setOnClickListener(v -> sendSelectedFile());
-
-        statusText = new TextView(this);
-        statusText.setText("Esperando archivo...");
-        statusText.setTextColor(Color.rgb(229, 231, 235));
-        statusText.setPadding(0, 24, 0, 0);
-
-        layout.addView(title);
-        layout.addView(subtitle);
-        layout.addView(urlInput);
-        layout.addView(pickButton);
-        layout.addView(sendButton);
-        layout.addView(statusText);
-
-        setContentView(layout);
-    }
-
-    private void handleSharedFile(Intent intent) {
-        if (intent != null && Intent.ACTION_SEND.equals(intent.getAction())) {
-            Uri uri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
-            if (uri != null) {
-                selectedUri = uri;
-                statusText.setText("Archivo recibido desde Compartir: " + getFileName(uri));
-            }
-        }
-    }
-
-    private void pickFile() {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.setType("*/*");
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        startActivityForResult(intent, PICK_FILE);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == PICK_FILE && resultCode == RESULT_OK && data != null) {
-            selectedUri = data.getData();
-            if (selectedUri != null) {
-                statusText.setText("Seleccionado: " + getFileName(selectedUri));
-            }
-        }
-    }
-
-    private void sendSelectedFile() {
-        if (selectedUri == null) {
-            toast("Primero elegí un archivo");
-            return;
-        }
-
-        String baseUrl = urlInput.getText().toString().trim();
-        while (baseUrl.endsWith("/")) {
-            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
-        }
-
-        if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
-            toast("Poné una URL válida");
-            return;
-        }
-
-        final String finalBaseUrl = baseUrl;
-        statusText.setText("Enviando...");
-
-        new Thread(() -> {
-            try {
-                uploadFile(finalBaseUrl, selectedUri);
-                runOnUiThread(() -> statusText.setText("Archivo enviado correctamente"));
-            } catch (Exception e) {
-                runOnUiThread(() -> statusText.setText("Error: " + e.getMessage()));
-            }
-        }).start();
-    }
-
-    private void uploadFile(String baseUrl, Uri uri) throws Exception {
-        String boundary = "TransferLANBoundary" + System.currentTimeMillis();
-        URL url = new URL(baseUrl + "/transfer/upload");
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-
-        conn.setRequestMethod("POST");
-        conn.setDoOutput(true);
-        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
-
-        String filename = getFileName(uri);
-        InputStream input = getContentResolver().openInputStream(uri);
-        if (input == null) throw new Exception("No se pudo abrir archivo");
-
-        DataOutputStream out = new DataOutputStream(conn.getOutputStream());
-        out.writeBytes("--" + boundary + "\r\n");
-        out.writeBytes("Content-Disposition: form-data; name=\"file\"; filename=\"" + filename + "\"\r\n");
-        out.writeBytes("Content-Type: application/octet-stream\r\n\r\n");
-
-        byte[] buffer = new byte[1024 * 256];
-        int read;
-        while ((read = input.read(buffer)) > 0) {
-            out.write(buffer, 0, read);
-        }
-        input.close();
-
-        out.writeBytes("\r\n--" + boundary + "--\r\n");
-        out.flush();
-        out.close();
-
-        int code = conn.getResponseCode();
-        if (code < 200 || code > 299) {
-            throw new Exception("HTTP " + code);
-        }
-    }
-
-    private String getFileName(Uri uri) {
-        String name = "archivo_transferlan";
-        Cursor cursor = getContentResolver().query(uri, null, null, null, null);
-        if (cursor != null) {
-            try {
-                int index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-                if (index >= 0 && cursor.moveToFirst()) {
-                    name = cursor.getString(index);
-                }
-            } finally {
-                cursor.close();
-            }
-        }
-        return name;
-    }
-
-    private void toast(String msg) {
-        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
-    }
+public class MainActivity extends Activity{
+ static final int PICK=1201; EditText urlInput; TextView status; LinearLayout devices; Uri selected;
+ public void onCreate(Bundle b){super.onCreate(b); ui(); shared(getIntent());}
+ public void onNewIntent(Intent i){super.onNewIntent(i); shared(i);}
+ void ui(){ScrollView s=new ScrollView(this); LinearLayout l=new LinearLayout(this); l.setOrientation(LinearLayout.VERTICAL); l.setPadding(32,48,32,32); l.setBackgroundColor(Color.rgb(15,23,42));
+ TextView t=txt("TransferLAN+",28,229,231,235), sub=txt("Sin cuentas. Sin nube. Sin cables.",15,56,189,248); l.addView(t);l.addView(sub);
+ Button scan=new Button(this); scan.setText("Buscar dispositivos"); scan.setOnClickListener(v->scan()); l.addView(scan);
+ devices=new LinearLayout(this); devices.setOrientation(LinearLayout.VERTICAL); l.addView(devices);
+ urlInput=new EditText(this); urlInput.setHint("http://IP-DE-TU-PC:5050"); urlInput.setText("http://"); urlInput.setSingleLine(true); urlInput.setTextColor(Color.WHITE); urlInput.setHintTextColor(Color.GRAY); l.addView(urlInput);
+ Button pick=new Button(this); pick.setText("Elegir archivo"); pick.setOnClickListener(v->pick()); l.addView(pick);
+ Button send=new Button(this); send.setText("Enviar a la PC"); send.setOnClickListener(v->send()); l.addView(send);
+ status=txt("Esperando archivo...",15,229,231,235); status.setPadding(0,24,0,0); l.addView(status); s.addView(l); setContentView(s);}
+ TextView txt(String x,int sz,int r,int g,int b){TextView v=new TextView(this);v.setText(x);v.setTextSize(sz);v.setTextColor(Color.rgb(r,g,b));return v;}
+ void shared(Intent i){ if(i!=null&&Intent.ACTION_SEND.equals(i.getAction())){Uri u=i.getParcelableExtra(Intent.EXTRA_STREAM); if(u!=null){selected=u; if(status!=null)status.setText("Archivo compartido: "+name(u));}}}
+ void scan(){devices.removeAllViews(); status.setText("Buscando..."); new Thread(()->{String ip=local(); if(ip.length()==0){runOnUiThread(()->status.setText("No se detectó IP local"));return;} String pre=ip.substring(0,ip.lastIndexOf(".")+1); int[] f={0}; for(int i=1;i<=254;i++){String base="http://"+pre+i+":5050"; try{HttpURLConnection c=(HttpURLConnection)new URL(base+"/device/info").openConnection();c.setConnectTimeout(180);c.setReadTimeout(250); if(c.getResponseCode()==200){String body=read(c.getInputStream());f[0]++; runOnUiThread(()->addDevice(base,body));}c.disconnect();}catch(Exception e){}} runOnUiThread(()->status.setText(f[0]==0?"No se encontraron dispositivos":("Dispositivos encontrados: "+f[0])));}).start();}
+ void addDevice(String base,String info){Button b=new Button(this);b.setText("Usar "+base);b.setOnClickListener(v->{urlInput.setText(base);status.setText("Destino: "+base);});devices.addView(b);TextView d=txt(info,11,148,163,184);devices.addView(d);}
+ String local(){try{Enumeration<NetworkInterface> es=NetworkInterface.getNetworkInterfaces();while(es.hasMoreElements()){NetworkInterface n=es.nextElement();Enumeration<InetAddress> as=n.getInetAddresses();while(as.hasMoreElements()){InetAddress a=as.nextElement();if(!a.isLoopbackAddress()&&a instanceof java.net.Inet4Address)return a.getHostAddress();}}}catch(Exception e){}return "";}
+ String read(InputStream in)throws Exception{BufferedReader br=new BufferedReader(new InputStreamReader(in));StringBuilder sb=new StringBuilder();String line;while((line=br.readLine())!=null)sb.append(line).append("\n");return sb.toString();}
+ void pick(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,PICK);}
+ protected void onActivityResult(int r,int c,Intent d){super.onActivityResult(r,c,d);if(r==PICK&&c==RESULT_OK&&d!=null){selected=d.getData();status.setText("Seleccionado: "+name(selected));}}
+ void send(){if(selected==null){toast("Primero elegí archivo");return;}String base=urlInput.getText().toString().trim();while(base.endsWith("/"))base=base.substring(0,base.length()-1);if(!base.startsWith("http")){toast("URL inválida");return;}String fb=base;status.setText("Enviando...");new Thread(()->{try{upload(fb,selected);runOnUiThread(()->status.setText("Archivo enviado correctamente"));}catch(Exception e){runOnUiThread(()->status.setText("Error: "+e.getMessage()));}}).start();}
+ void upload(String base,Uri uri)throws Exception{String bd="TL"+System.currentTimeMillis();HttpURLConnection c=(HttpURLConnection)new URL(base+"/transfer/upload").openConnection();c.setRequestMethod("POST");c.setDoOutput(true);c.setRequestProperty("Content-Type","multipart/form-data; boundary="+bd);InputStream in=getContentResolver().openInputStream(uri);DataOutputStream out=new DataOutputStream(c.getOutputStream());String fn=name(uri);out.writeBytes("--"+bd+"\r\nContent-Disposition: form-data; name=\"file\"; filename=\""+fn+"\"\r\nContent-Type: application/octet-stream\r\n\r\n");byte[] buf=new byte[262144];int n;while((n=in.read(buf))>0)out.write(buf,0,n);in.close();out.writeBytes("\r\n--"+bd+"--\r\n");out.close();int code=c.getResponseCode();if(code<200||code>299)throw new Exception("HTTP "+code);}
+ String name(Uri u){String n="archivo_transferlan";Cursor c=getContentResolver().query(u,null,null,null,null);if(c!=null){try{int i=c.getColumnIndex(OpenableColumns.DISPLAY_NAME);if(i>=0&&c.moveToFirst())n=c.getString(i);}finally{c.close();}}return n;}
+ void toast(String m){Toast.makeText(this,m,Toast.LENGTH_SHORT).show();}
 }

@@ -1,10 +1,10 @@
 # Changelog
 
-## v1.2.3-beta
+## v1.2.4-beta
 
-- Agrega historial local Android.
-- Agrega confirmación final con archivo, tamaño, tiempo y velocidad.
-- Agrega historial de recibidos en Windows.
-- Agrega endpoint `/history`.
-- Mejora página Windows con últimos archivos recibidos.
-- Mantiene transferencia, progreso y emparejamiento seguro.
+- Agrega QR real offline en Windows usando `github.com/skip2/go-qrcode`.
+- Agrega endpoint `/pairing/qr.png`.
+- La página local muestra el QR real.
+- Reactiva scanner QR en Android con permiso de cámara.
+- Mantiene fallback `Pegar código de PC`.
+- Mantiene historial y confirmación de transferencia.

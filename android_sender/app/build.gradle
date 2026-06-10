@@ -10,7 +10,11 @@ android {
         applicationId 'com.transferlan.plus'
         minSdk 24
         targetSdk 35
-        versionCode 18
-        versionName '1.2.3-beta'
+        versionCode 19
+        versionName '1.2.4-beta'
     }
+}
+
+dependencies {
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
 }

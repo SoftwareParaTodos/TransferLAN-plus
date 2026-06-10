@@ -28,9 +28,12 @@ public class MainActivity extends Activity {
     TextView status;
     TextView selectedDeviceText;
     TextView selectedFileText;
+    TextView progressText;
+    ProgressBar progressBar;
     LinearLayout devices;
     LinearLayout advancedBox;
     Uri selected;
+    long selectedSize = 0;
     String selectedBaseUrl = "";
     WifiManager.MulticastLock multicastLock;
 
@@ -87,6 +90,14 @@ public class MainActivity extends Activity {
 
         selectedFileText = cardText("Archivo: ninguno seleccionado");
         root.addView(selectedFileText);
+
+        progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progressBar.setMax(100);
+        progressBar.setProgress(0);
+        root.addView(progressBar);
+
+        progressText = text("Progreso: 0%", 14, 148,163,184, false);
+        root.addView(progressText);
 
         Button send = primaryButton("ENVIAR");
         send.setOnClickListener(v -> sendFile());
@@ -177,17 +188,21 @@ public class MainActivity extends Activity {
     void handleShared(Intent i) {
         if (i != null && Intent.ACTION_SEND.equals(i.getAction())) {
             Uri u = i.getParcelableExtra(Intent.EXTRA_STREAM);
-            if (u != null) {
-                selected = u;
-                if (selectedFileText != null) selectedFileText.setText("Archivo: " + fileName(u));
-            }
+            if (u != null) setSelectedFile(u);
         }
+    }
+
+    void setSelectedFile(Uri u) {
+        selected = u;
+        selectedSize = fileSize(u);
+        selectedFileText.setText("Archivo: " + fileName(u) + " (" + formatBytes(selectedSize) + ")");
+        progressBar.setProgress(0);
+        progressText.setText("Progreso: 0%");
     }
 
     void discoverDevices() {
         devices.removeAllViews();
         status.setText("Buscando dispositivos en la red...");
-
         new Thread(() -> {
             final Set<String> found = new HashSet<>();
             try {
@@ -265,17 +280,23 @@ public class MainActivity extends Activity {
     }
 
     void addDeviceCard(String base, String body) {
-        String name = extract(body, "name");
-        String os = extract(body, "os");
-        String version = extract(body, "version");
-        if (name.length() == 0) name = "Computadora encontrada";
-        if (os.length() == 0) os = "desktop";
+        String parsedName = extract(body, "name");
+        String parsedOs = extract(body, "os");
+        String parsedVersion = extract(body, "version");
 
-        Button b = secondaryButton("🖥  " + name + "\n" + os + " · " + version + "\nSeleccionar");
+        if (parsedName.length() == 0) parsedName = "Computadora encontrada";
+        if (parsedOs.length() == 0) parsedOs = "desktop";
+
+        final String deviceName = parsedName;
+        final String deviceOs = parsedOs;
+        final String deviceVersion = parsedVersion;
+        final String deviceBase = base;
+
+        Button b = secondaryButton("🖥  " + deviceName + "\n" + deviceOs + " · " + deviceVersion + "\nSeleccionar");
         b.setOnClickListener(v -> {
-            selectedBaseUrl = base;
-            urlInput.setText(base);
-            selectedDeviceText.setText("Destino: " + name + " (" + base + ")");
+            selectedBaseUrl = deviceBase;
+            urlInput.setText(deviceBase);
+            selectedDeviceText.setText("Destino: " + deviceName + " (" + deviceBase + ")");
             status.setText("Dispositivo seleccionado.");
         });
         devices.addView(b);
@@ -304,7 +325,9 @@ public class MainActivity extends Activity {
     }
 
     void releaseMulticastLock() {
-        try { if (multicastLock != null && multicastLock.isHeld()) multicastLock.release(); } catch(Exception ignored) {}
+        try {
+            if (multicastLock != null && multicastLock.isHeld()) multicastLock.release();
+        } catch(Exception ignored) {}
     }
 
     String extract(String json, String key) {
@@ -317,7 +340,9 @@ public class MainActivity extends Activity {
             int j = i;
             while (j < json.length() && json.charAt(j) != '"' && json.charAt(j) != ',' && json.charAt(j) != '}') j++;
             return json.substring(i,j).replace("\\/","/").trim();
-        } catch(Exception e) { return ""; }
+        } catch(Exception e) {
+            return "";
+        }
     }
 
     String localIp() {
@@ -346,23 +371,37 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
         if (req == PICK && res == RESULT_OK && data != null) {
-            selected = data.getData();
-            selectedFileText.setText("Archivo: " + fileName(selected));
+            setSelectedFile(data.getData());
         }
     }
 
     void sendFile() {
-        if (selected == null) { toast("Primero elegí un archivo"); return; }
+        if (selected == null) {
+            toast("Primero elegí un archivo");
+            return;
+        }
+
         String base = selectedBaseUrl.length() > 0 ? selectedBaseUrl : urlInput.getText().toString().trim();
         while (base.endsWith("/")) base = base.substring(0, base.length()-1);
-        if (!base.startsWith("http://") && !base.startsWith("https://")) { toast("Seleccioná un dispositivo o cargá una URL válida"); return; }
+
+        if (!base.startsWith("http://") && !base.startsWith("https://")) {
+            toast("Seleccioná un dispositivo o cargá una URL válida");
+            return;
+        }
 
         final String finalBase = base;
+        progressBar.setProgress(0);
+        progressText.setText("Progreso: 0%");
         status.setText("Enviando...");
+
         new Thread(() -> {
             try {
                 upload(finalBase, selected);
-                runOnUiThread(() -> status.setText("Archivo enviado correctamente."));
+                runOnUiThread(() -> {
+                    progressBar.setProgress(100);
+                    progressText.setText("Progreso: 100% · Completado");
+                    status.setText("Archivo enviado correctamente.");
+                });
             } catch(Exception e) {
                 runOnUiThread(() -> status.setText("Error: " + e.getMessage()));
             }
@@ -375,21 +414,55 @@ public class MainActivity extends Activity {
         c.setRequestMethod("POST");
         c.setDoOutput(true);
         c.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+
         InputStream in = getContentResolver().openInputStream(uri);
         if (in == null) throw new Exception("No se pudo abrir archivo");
-        DataOutputStream out = new DataOutputStream(c.getOutputStream());
+
+        ProgressOutputStream out = new ProgressOutputStream(c.getOutputStream());
         String fn = fileName(uri);
-        out.writeBytes("--" + boundary + "\r\n");
-        out.writeBytes("Content-Disposition: form-data; name=\"file\"; filename=\"" + fn + "\"\r\n");
-        out.writeBytes("Content-Type: application/octet-stream\r\n\r\n");
+
+        out.writeRaw("--" + boundary + "\r\n");
+        out.writeRaw("Content-Disposition: form-data; name=\"file\"; filename=\"" + fn + "\"\r\n");
+        out.writeRaw("Content-Type: application/octet-stream\r\n\r\n");
+
         byte[] buf = new byte[1024 * 256];
         int n;
-        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        long start = System.currentTimeMillis();
+
+        while ((n = in.read(buf)) > 0) {
+            out.writeFile(buf, 0, n);
+            updateProgress(out.fileBytesWritten, selectedSize, Math.max(1, System.currentTimeMillis() - start));
+        }
+
         in.close();
-        out.writeBytes("\r\n--" + boundary + "--\r\n");
+        out.writeRaw("\r\n--" + boundary + "--\r\n");
         out.close();
+
         int code = c.getResponseCode();
         if (code < 200 || code > 299) throw new Exception("HTTP " + code);
+    }
+
+    void updateProgress(long sent, long total, long elapsedMs) {
+        int percent = total > 0 ? (int)Math.min(100, (sent * 100) / total) : 0;
+        double mbps = sent / 1024.0 / 1024.0 / (elapsedMs / 1000.0);
+        runOnUiThread(() -> {
+            progressBar.setProgress(percent);
+            progressText.setText("Progreso: " + percent + "% · " + formatBytes(sent) + " / " + formatBytes(total) + " · " + String.format(Locale.US, "%.1f MB/s", mbps));
+        });
+    }
+
+    class ProgressOutputStream extends FilterOutputStream {
+        long fileBytesWritten = 0;
+        ProgressOutputStream(OutputStream out) {
+            super(out);
+        }
+        void writeRaw(String s) throws IOException {
+            out.write(s.getBytes("UTF-8"));
+        }
+        void writeFile(byte[] b, int off, int len) throws IOException {
+            out.write(b, off, len);
+            fileBytesWritten += len;
+        }
     }
 
     String readAll(InputStream in) throws Exception {
@@ -407,10 +480,40 @@ public class MainActivity extends Activity {
             try {
                 int idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME);
                 if (idx >= 0 && c.moveToFirst()) n = c.getString(idx);
-            } finally { c.close(); }
+            } finally {
+                c.close();
+            }
         }
         return n;
     }
 
-    void toast(String m) { Toast.makeText(this, m, Toast.LENGTH_SHORT).show(); }
+    long fileSize(Uri u) {
+        long size = 0;
+        Cursor c = getContentResolver().query(u, null, null, null, null);
+        if (c != null) {
+            try {
+                int idx = c.getColumnIndex(OpenableColumns.SIZE);
+                if (idx >= 0 && c.moveToFirst()) size = c.getLong(idx);
+            } finally {
+                c.close();
+            }
+        }
+        return size;
+    }
+
+    String formatBytes(long b) {
+        if (b <= 0) return "0 B";
+        double v = b;
+        String[] units = {"B", "KB", "MB", "GB", "TB"};
+        int i = 0;
+        while (v >= 1024 && i < units.length - 1) {
+            v /= 1024;
+            i++;
+        }
+        return String.format(Locale.US, "%.1f %s", v, units[i]);
+    }
+
+    void toast(String m) {
+        Toast.makeText(this, m, Toast.LENGTH_SHORT).show();
+    }
 }

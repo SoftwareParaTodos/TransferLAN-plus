@@ -1,13 +1,11 @@
 # Changelog
 
-## v1.1.0-beta
+## v1.1.2-beta
 
-- Rediseño Android estilo AirDrop/LocalSend.
-- Tarjetas de dispositivos detectados.
-- Se oculta la IP manual en modo avanzado.
-- Se integra logo oficial TransferLAN+.
-- Página Windows local rediseñada.
-- Endpoint `/assets/logo.png`.
-- Mejora visual del estado del servidor.
-- Mantiene UDP broadcast discovery.
-- Mantiene HTTP multipart upload.
+- Corrige error de compilación Android causado por variables no finales dentro de lambdas Java.
+- Mantiene progreso real: porcentaje, MB enviados, MB totales y velocidad.
+- Mantiene experiencia visual AirDrop.
+
+## v1.1.1-beta
+
+- Agrega progreso real en Android durante el envío.

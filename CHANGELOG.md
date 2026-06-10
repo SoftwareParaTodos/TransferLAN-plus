@@ -1,11 +1,10 @@
 # Changelog
 
-## v1.2.2-beta
+## v1.2.3-beta
 
-- Corrige QR/pareo de Windows mostrando link local visible y copiable.
-- Desactiva scanner QR nativo inestable en Android.
-- Agrega botón Android `Pegar código de PC`.
-- Soporta `transferlan://connect?...` pegado manualmente.
-- Mantiene dispositivos conocidos.
-- Mantiene agregar por IP.
-- Mantiene progreso de transferencia.
+- Agrega historial local Android.
+- Agrega confirmación final con archivo, tamaño, tiempo y velocidad.
+- Agrega historial de recibidos en Windows.
+- Agrega endpoint `/history`.
+- Mejora página Windows con últimos archivos recibidos.
+- Mantiene transferencia, progreso y emparejamiento seguro.

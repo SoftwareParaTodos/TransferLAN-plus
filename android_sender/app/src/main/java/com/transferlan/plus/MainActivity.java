@@ -28,6 +28,7 @@ public class MainActivity extends Activity {
     static final String PREFS = "transferlan_prefs";
     static final String KEY_LAST_BASE = "last_base_url";
     static final String KEY_LAST_NAME = "last_device_name";
+    static final String KEY_LAST_HISTORY = "last_history";
 
     EditText ipInput, portInput;
     TextView status, selectedDeviceText, selectedFileText, progressText, knownDeviceText;
@@ -96,6 +97,10 @@ public class MainActivity extends Activity {
         Button reconnect = secondaryButton("Reconectar última PC");
         reconnect.setOnClickListener(v -> autoConnectLastDevice());
         root.addView(reconnect);
+
+        Button history = secondaryButton("Ver historial local");
+        history.setOnClickListener(v -> showLocalHistory());
+        root.addView(history);
 
         Button scan = primaryButton("Buscar dispositivos");
         scan.setOnClickListener(v -> discoverDevices());
@@ -523,7 +528,10 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     progressBar.setProgress(100);
                     progressText.setText("Progreso: 100% · Completado");
-                    status.setText("Archivo enviado correctamente.");
+                    String summary = "✓ Archivo enviado: " + fileName(selected) + " (" + formatBytes(selectedSize) + ")";
+                    status.setText(summary);
+                    addLocalHistory(summary);
+                    showMessage("Transferencia completada", summary);
                 });
             } catch(Exception e) {
                 runOnUiThread(() -> status.setText("Error: " + e.getMessage()));
@@ -615,5 +623,33 @@ public class MainActivity extends Activity {
         return String.format(Locale.US, "%.1f %s", v, units[i]);
     }
 
+
+    void addLocalHistory(String line) {
+        String old = prefs.getString(KEY_LAST_HISTORY, "");
+        String entry = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(new java.util.Date()) + " · " + line;
+        String updated = entry + "\n" + old;
+        if (updated.length() > 4000) updated = updated.substring(0, 4000);
+        prefs.edit().putString(KEY_LAST_HISTORY, updated).apply();
+    }
+
+    void showLocalHistory() {
+        String hist = prefs.getString(KEY_LAST_HISTORY, "");
+        if (hist.length() == 0) hist = "Todavía no hay envíos registrados.";
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Historial local")
+            .setMessage(hist)
+            .setPositiveButton("OK", null)
+            .show();
+    }
+
+    void showMessage(String title, String msg) {
+        new android.app.AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(msg)
+            .setPositiveButton("OK", null)
+            .show();
+    }
+
     void toast(String m) { Toast.makeText(this, m, Toast.LENGTH_SHORT).show(); }
 }
+

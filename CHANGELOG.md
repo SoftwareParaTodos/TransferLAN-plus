@@ -1,10 +1,9 @@
 # Changelog
 
-## v1.2.4-beta
+## v1.2.5-beta
 
-- Agrega QR real offline en Windows usando `github.com/skip2/go-qrcode`.
-- Agrega endpoint `/pairing/qr.png`.
-- La página local muestra el QR real.
-- Reactiva scanner QR en Android con permiso de cámara.
-- Mantiene fallback `Pegar código de PC`.
-- Mantiene historial y confirmación de transferencia.
+- Corrige build Android quitando dependencia inestable del scanner QR.
+- Agrega QR real en Windows con `github.com/skip2/go-qrcode`.
+- Mantiene emparejamiento por código `transferlan://connect?...`.
+- Mantiene `Pegar código de PC` en Android.
+- Mantiene historial y confirmación.

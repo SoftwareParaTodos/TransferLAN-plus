@@ -18,7 +18,7 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 )
 
-const version = "v1.2.4-beta"
+const version = "v1.2.5-beta"
 const httpPort = 5050
 const udpPort = 5050
 
@@ -99,20 +99,19 @@ h1{text-align:center;font-size:42px;margin:8px 0}.tag{text-align:center;color:#3
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.box{background:#0b1220;border:1px solid #334155;border-radius:20px;padding:18px}
 code,pre,textarea{background:#020617;padding:12px;border-radius:12px;display:block;overflow:auto;color:#dbeafe;word-break:break-all;width:100%%;box-sizing:border-box;border:1px solid #334155}
 button{background:#38bdf8;color:#00111f;border:0;border-radius:14px;padding:12px 18px;font-weight:900;cursor:pointer;margin:4px}
-.ok{color:#22c55e;font-weight:900}.warn{color:#fbbf24;font-weight:900}.small{color:#94a3b8;font-size:14px}.pair{font-size:13px;min-height:95px}
-.qr{display:block;margin:10px auto;background:#fff;border-radius:18px;padding:12px;max-width:260px;width:100%%}
-.item{border-bottom:1px solid #334155;padding:10px 0}
+.ok{color:#22c55e;font-weight:900}.small{color:#94a3b8;font-size:14px}.pair{font-size:13px;min-height:95px}
+.qr{display:block;margin:10px auto;background:#fff;border-radius:18px;padding:12px;max-width:260px;width:100%%}.item{border-bottom:1px solid #334155;padding:10px 0}
 </style></head>
 <body><div class="card">
 <img class="logo" src="/assets/logo.png" alt="TransferLAN+" onerror="this.style.display='none'">
 <h1>TransferLAN+</h1><div class="tag">Sin cuentas. Sin nube. Sin cables.</div>
 <div class="grid">
 <div class="box"><h2>Estado</h2><p class="ok">Servidor activo</p><p class="small">Versión %s</p><p>Desde esta PC:</p><code>http://localhost:5050</code><p>Desde Android:</p><code>http://%s:5050</code></div>
-<div class="box"><h2>Emparejar por QR</h2><p>En Android tocá <b>Escanear QR</b>.</p><img class="qr" src="/pairing/qr.png?t=%d" alt="QR TransferLAN+"><p class="small">Si falla la cámara, usá el código de abajo.</p></div>
+<div class="box"><h2>QR de emparejamiento</h2><p>Escanealo con Cámara/Google Lens, copiá el link y pegalo en Android.</p><img class="qr" src="/pairing/qr.png?t=%d" alt="QR TransferLAN+"></div>
 <div class="box"><h2>Código alternativo</h2><textarea class="pair" id="pair">%s</textarea><button onclick="copyPair()">Copiar código</button></div>
-<div class="box"><h2>Descargas</h2><p>Los archivos recibidos quedan en:</p><code>core/server/downloads</code><p><a style="color:#38bdf8" href="/downloads/" target="_blank">Ver carpeta desde navegador</a></p></div>
 <div class="box"><h2>Últimos recibidos</h2><button onclick="loadHistory()">Actualizar historial</button><div id="hist">Cargando...</div></div>
-<div class="box"><h2>Diagnóstico</h2><button onclick="check('/health')">/health</button><button onclick="check('/device/info')">/device/info</button><button onclick="check('/pairing/info')">/pairing/info</button><pre id="diag">Sin verificar</pre></div>
+<div class="box"><h2>Descargas</h2><a style="color:#38bdf8" href="/downloads/" target="_blank">Ver carpeta desde navegador</a></div>
+<div class="box"><h2>Diagnóstico</h2><button onclick="check('/health')">/health</button><button onclick="check('/pairing/info')">/pairing/info</button><pre id="diag">Sin verificar</pre></div>
 </div></div>
 <script>
 async function check(path){const r=await fetch(path);const ct=r.headers.get('content-type')||'';diag.textContent=ct.includes('application/json')?JSON.stringify(await r.json(),null,2):await r.text();}
@@ -168,8 +167,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil { http.Error(w,err.Error(),500); return }
 	if err := os.Rename(tmp, final); err != nil { http.Error(w,err.Error(),500); return }
 	sum := hex.EncodeToString(hash.Sum(nil))
-	item := HistoryItem{Filename:name, Size:written, SHA256:sum, Path:final, Time:time.Now().Format("2006-01-02 15:04:05")}
-	appendHistory(item)
+	appendHistory(HistoryItem{Filename:name, Size:written, SHA256:sum, Path:final, Time:time.Now().Format("2006-01-02 15:04:05")})
 	writeJSON(w, map[string]any{"ok":true,"filename":name,"size":written,"sha256":sum,"path":final,"message":"Archivo recibido correctamente"})
 }
 func deviceInfo() DeviceInfo {

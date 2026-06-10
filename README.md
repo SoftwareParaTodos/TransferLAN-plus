@@ -1,24 +1,18 @@
-# TransferLAN+ v1.2.4-beta — QR Real Fix
+# TransferLAN+ v1.2.5-beta — QR Windows + Android seguro
 
 **Sin cuentas. Sin nube. Sin cables.**
 
-Esta versión arregla el emparejamiento QR.
+Esta versión corrige el bloqueo de compilación Android de v1.2.4.
 
-## Correcciones
+## Qué cambia
 
-- Windows genera un QR real offline en `/pairing/qr.png`.
+- Windows genera un QR real en `/pairing/qr.png`.
 - La página local muestra el QR real.
-- Android vuelve a tener botón `Escanear QR`.
-- Android pide permiso de cámara antes de abrir el scanner.
-- Si el scanner falla, sigue disponible `Pegar código de PC`.
-- Se mantiene historial, progreso, IP manual y dispositivos conocidos.
+- Android mantiene `Pegar código de PC`.
+- Se elimina temporalmente el scanner interno para evitar fallos de compilación/cierres.
+- Podés escanear el QR con Cámara/Google Lens, copiar el link y pegarlo en Android.
+- Mantiene historial, progreso, agregar por IP y PC conocida.
 
-## Nota técnica
+## Motivo
 
-Windows usa la librería Go:
-
-```text
-github.com/skip2/go-qrcode
-```
-
-La primera compilación puede descargar esa dependencia.
+La integración del scanner interno estaba rompiendo el build de GitHub Actions. Esta versión deja el QR real en Windows y mantiene Android estable.

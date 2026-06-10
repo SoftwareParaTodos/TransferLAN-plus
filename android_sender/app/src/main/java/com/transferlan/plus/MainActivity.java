@@ -16,18 +16,13 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.content.Context;
-import android.Manifest;
-import android.content.pm.PackageManager;
 
 import java.io.*;
 import java.net.*;
 import java.util.*;
-import com.google.zxing.integration.android.IntentIntegrator;
-import com.google.zxing.integration.android.IntentResult;
 
 public class MainActivity extends Activity {
     static final int PICK = 1201;
-    static final int REQ_CAMERA_QR = 2201;
     static final int DISCOVERY_PORT = 5050;
     static final String DISCOVERY_MESSAGE = "TRANSFERLAN_DISCOVER";
     static final String PREFS = "transferlan_prefs";
@@ -94,10 +89,6 @@ public class MainActivity extends Activity {
 
         knownDeviceText = cardText("Dispositivo conocido: ninguno");
         root.addView(knownDeviceText);
-
-        Button scanQr = primaryButton("Escanear QR");
-        scanQr.setOnClickListener(v -> startQrScanSafe());
-        root.addView(scanQr);
 
         Button pasteCode = primaryButton("Pegar código de PC");
         pasteCode.setOnClickListener(v -> showPasteCodeDialog());
@@ -178,44 +169,6 @@ public class MainActivity extends Activity {
         scroll.addView(root);
         setContentView(scroll);
         refreshKnownDeviceLabel();
-    }
-
-
-    void startQrScanSafe() {
-        try {
-            if (android.os.Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_QR);
-                return;
-            }
-            startQrScanNow();
-        } catch(Exception e) {
-            status.setText("No se pudo abrir cámara. Usá Pegar código de PC.");
-        }
-    }
-
-    void startQrScanNow() {
-        try {
-            IntentIntegrator integrator = new IntentIntegrator(this);
-            integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
-            integrator.setPrompt("Escaneá el QR de TransferLAN+");
-            integrator.setBeepEnabled(false);
-            integrator.setOrientationLocked(false);
-            integrator.initiateScan();
-        } catch(Exception e) {
-            status.setText("Error abriendo scanner. Usá Pegar código de PC.");
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQ_CAMERA_QR) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                startQrScanNow();
-            } else {
-                status.setText("Permiso de cámara denegado. Usá Pegar código de PC.");
-            }
-        }
     }
 
     void showPasteCodeDialog() {
@@ -556,16 +509,6 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onActivityResult(int req, int res, Intent data) {
-        IntentResult qrResult = IntentIntegrator.parseActivityResult(req, res, data);
-        if (qrResult != null) {
-            if (qrResult.getContents() != null) {
-                handlePairingText(qrResult.getContents());
-            } else {
-                status.setText("Escaneo cancelado. También podés usar Pegar código de PC.");
-            }
-            return;
-        }
-
         super.onActivityResult(req, res, data);
         if (req == PICK && res == RESULT_OK && data != null) setSelectedFile(data.getData());
     }

@@ -39,3 +39,6 @@
 2026/06/10 17:48:07 Servidor iniciado en http://localhost:5050
 2026/06/10 17:48:07 Desde el celular usar: http://172.27.98.190:5050
 2026/06/10 17:48:07 listen tcp :5050: bind: Solo se permite un uso de cada dirección de socket (protocolo/dirección de red/puerto)
+2026/06/10 18:28:31 TransferLAN+ v1.0.2-beta
+2026/06/10 18:28:31 Servidor iniciado en http://localhost:5050
+2026/06/10 18:28:31 Desde el celular usar: http://192.168.1.107:5050

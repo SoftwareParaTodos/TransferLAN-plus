@@ -1,6 +1,7 @@
 package com.transferlan.plus;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -16,9 +17,6 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.content.Context;
 
-import com.google.zxing.integration.android.IntentIntegrator;
-import com.google.zxing.integration.android.IntentResult;
-
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -31,24 +29,17 @@ public class MainActivity extends Activity {
     static final String KEY_LAST_BASE = "last_base_url";
     static final String KEY_LAST_NAME = "last_device_name";
 
-    EditText ipInput;
-    EditText portInput;
-    TextView status;
-    TextView selectedDeviceText;
-    TextView selectedFileText;
-    TextView progressText;
-    TextView knownDeviceText;
+    EditText ipInput, portInput;
+    TextView status, selectedDeviceText, selectedFileText, progressText, knownDeviceText;
     ProgressBar progressBar;
-    LinearLayout devices;
-    LinearLayout manualBox;
+    LinearLayout devices, manualBox;
     Uri selected;
     long selectedSize = 0;
     String selectedBaseUrl = "";
     SharedPreferences prefs;
     WifiManager.MulticastLock multicastLock;
 
-    @Override
-    public void onCreate(Bundle b) {
+    @Override public void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         buildUi();
@@ -56,20 +47,17 @@ public class MainActivity extends Activity {
         autoConnectLastDevice();
     }
 
-    @Override
-    public void onNewIntent(Intent i) {
+    @Override public void onNewIntent(Intent i) {
         super.onNewIntent(i);
         handleIntent(i);
     }
 
     void handleIntent(Intent i) {
         if (i == null) return;
-
         if (Intent.ACTION_VIEW.equals(i.getAction()) && i.getData() != null) {
             handlePairingUri(i.getData());
             return;
         }
-
         if (Intent.ACTION_SEND.equals(i.getAction())) {
             Uri u = i.getParcelableExtra(Intent.EXTRA_STREAM);
             if (u != null) setSelectedFile(u);
@@ -101,9 +89,9 @@ public class MainActivity extends Activity {
         knownDeviceText = cardText("Dispositivo conocido: ninguno");
         root.addView(knownDeviceText);
 
-        Button qr = primaryButton("Escanear QR");
-        qr.setOnClickListener(v -> scanQr());
-        root.addView(qr);
+        Button pasteCode = primaryButton("Pegar código de PC");
+        pasteCode.setOnClickListener(v -> showPasteCodeDialog());
+        root.addView(pasteCode);
 
         Button reconnect = secondaryButton("Reconectar última PC");
         reconnect.setOnClickListener(v -> autoConnectLastDevice());
@@ -178,47 +166,38 @@ public class MainActivity extends Activity {
         refreshKnownDeviceLabel();
     }
 
-    void scanQr() {
-        IntentIntegrator integrator = new IntentIntegrator(this);
-        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
-        integrator.setPrompt("Escaneá el QR de TransferLAN+");
-        integrator.setBeepEnabled(false);
-        integrator.setOrientationLocked(false);
-        integrator.initiateScan();
-    }
+    void showPasteCodeDialog() {
+        final EditText input = new EditText(this);
+        input.setHint("transferlan://connect?...");
+        input.setMinLines(3);
+        input.setTextColor(Color.BLACK);
 
-    @Override
-    protected void onActivityResult(int req, int res, Intent data) {
-        IntentResult result = IntentIntegrator.parseActivityResult(req, res, data);
-        if (result != null) {
-            String contents = result.getContents();
-            if (contents != null) {
-                handlePairingText(contents);
-            } else {
-                status.setText("Escaneo cancelado.");
-            }
-            return;
-        }
-
-        super.onActivityResult(req, res, data);
-        if (req == PICK && res == RESULT_OK && data != null) {
-            setSelectedFile(data.getData());
-        }
+        new AlertDialog.Builder(this)
+            .setTitle("Pegar código de PC")
+            .setMessage("Copiá el código desde la PC y pegalo acá.")
+            .setView(input)
+            .setPositiveButton("Guardar", (dialog, which) -> handlePairingText(input.getText().toString().trim()))
+            .setNegativeButton("Cancelar", null)
+            .show();
     }
 
     void handlePairingText(String text) {
+        if (text.length() == 0) {
+            status.setText("Código vacío.");
+            return;
+        }
         try {
             Uri uri = Uri.parse(text);
             handlePairingUri(uri);
         } catch(Exception e) {
-            status.setText("QR inválido para TransferLAN+.");
+            status.setText("Código inválido.");
         }
     }
 
     void handlePairingUri(Uri uri) {
         if (uri == null) return;
         if (!"transferlan".equals(uri.getScheme()) || !"connect".equals(uri.getHost())) {
-            status.setText("QR no corresponde a TransferLAN+.");
+            status.setText("Código no corresponde a TransferLAN+.");
             return;
         }
 
@@ -229,19 +208,18 @@ public class MainActivity extends Activity {
 
         if (baseUrl == null || baseUrl.length() == 0) {
             if (ip == null || ip.length() == 0) {
-                status.setText("QR sin IP/base_url.");
+                status.setText("Código sin IP/base_url.");
                 return;
             }
             if (port == null || port.length() == 0) port = "5050";
             baseUrl = "http://" + ip + ":" + port;
         }
 
-        if (name == null || name.length() == 0) name = "PC por QR";
-
+        if (name == null || name.length() == 0) name = "PC por código";
         selectedBaseUrl = trimSlash(baseUrl);
         selectedDeviceText.setText("Destino: " + name + " (" + selectedBaseUrl + ")");
         saveKnownDevice(name, selectedBaseUrl);
-        status.setText("PC guardada desde QR. Probando conexión...");
+        status.setText("PC guardada. Probando conexión...");
         testAndSelectDevice(selectedBaseUrl, name);
     }
 
@@ -291,9 +269,7 @@ public class MainActivity extends Activity {
         return b;
     }
 
-    void toggleManual() {
-        manualBox.setVisibility(manualBox.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
-    }
+    void toggleManual() { manualBox.setVisibility(manualBox.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE); }
 
     void refreshKnownDeviceLabel() {
         String base = prefs.getString(KEY_LAST_BASE, "");
@@ -312,23 +288,20 @@ public class MainActivity extends Activity {
     }
 
     void autoConnectLastDevice() {
-        if (prefs == null) return;
+        if (prefs == null || status == null) return;
         String base = prefs.getString(KEY_LAST_BASE, "");
         if (base.length() == 0) {
-            if (status != null) status.setText("No hay PC conocida guardada.");
+            status.setText("No hay PC conocida guardada.");
             return;
         }
-        if (status != null) status.setText("Probando PC conocida...");
+        status.setText("Probando PC conocida...");
         testAndSelectDevice(base, prefs.getString(KEY_LAST_NAME, "PC conocida"));
     }
 
     void connectManualIp() {
         String ip = ipInput.getText().toString().trim();
         String port = portInput.getText().toString().trim();
-        if (ip.length() == 0) {
-            toast("Poné la IP de la PC");
-            return;
-        }
+        if (ip.length() == 0) { toast("Poné la IP de la PC"); return; }
         if (port.length() == 0) port = "5050";
         String base = (ip.startsWith("http://") || ip.startsWith("https://")) ? ip : "http://" + ip + ":" + port;
         status.setText("Probando conexión...");
@@ -364,10 +337,7 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    String trimSlash(String s) {
-        while (s.endsWith("/")) s = s.substring(0, s.length()-1);
-        return s;
-    }
+    String trimSlash(String s) { while (s.endsWith("/")) s = s.substring(0, s.length()-1); return s; }
 
     void setSelectedFile(Uri u) {
         selected = u;
@@ -388,9 +358,7 @@ public class MainActivity extends Activity {
                 socket.setBroadcast(true);
                 socket.setSoTimeout(1200);
                 byte[] data = DISCOVERY_MESSAGE.getBytes("UTF-8");
-                for (InetAddress target : broadcastTargets()) {
-                    socket.send(new DatagramPacket(data, data.length, target, DISCOVERY_PORT));
-                }
+                for (InetAddress target : broadcastTargets()) socket.send(new DatagramPacket(data, data.length, target, DISCOVERY_PORT));
                 long end = System.currentTimeMillis() + 2500;
                 byte[] buffer = new byte[4096];
                 while (System.currentTimeMillis() < end) {
@@ -450,7 +418,7 @@ public class MainActivity extends Activity {
                 } catch(Exception ignored) {}
             }
             runOnUiThread(() -> {
-                if (count[0] == 0) status.setText("No se encontraron dispositivos. Usá Agregar PC por IP o Escanear QR.");
+                if (count[0] == 0) status.setText("No se encontraron dispositivos. Usá Agregar PC por IP o Pegar código.");
                 else status.setText("Dispositivos encontrados: " + count[0]);
             });
         }).start();
@@ -497,9 +465,7 @@ public class MainActivity extends Activity {
     }
 
     void releaseMulticastLock() {
-        try {
-            if (multicastLock != null && multicastLock.isHeld()) multicastLock.release();
-        } catch(Exception ignored) {}
+        try { if (multicastLock != null && multicastLock.isHeld()) multicastLock.release(); } catch(Exception ignored) {}
     }
 
     String extract(String json, String key) {
@@ -512,9 +478,7 @@ public class MainActivity extends Activity {
             int j = i;
             while (j < json.length() && json.charAt(j) != '"' && json.charAt(j) != ',' && json.charAt(j) != '}') j++;
             return json.substring(i,j).replace("\\/","/").trim();
-        } catch(Exception e) {
-            return "";
-        }
+        } catch(Exception e) { return ""; }
     }
 
     String localIp() {
@@ -539,17 +503,16 @@ public class MainActivity extends Activity {
         startActivityForResult(i, PICK);
     }
 
+    @Override protected void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req == PICK && res == RESULT_OK && data != null) setSelectedFile(data.getData());
+    }
+
     void sendFile() {
-        if (selected == null) {
-            toast("Primero elegí un archivo");
-            return;
-        }
+        if (selected == null) { toast("Primero elegí un archivo"); return; }
         String base = selectedBaseUrl;
         if (base.length() == 0) base = prefs.getString(KEY_LAST_BASE, "");
-        if (base.length() == 0) {
-            toast("Seleccioná una PC, agregala por IP o escaneá QR");
-            return;
-        }
+        if (base.length() == 0) { toast("Seleccioná una PC, agregala por IP o pegá código"); return; }
         final String finalBase = trimSlash(base);
         progressBar.setProgress(0);
         progressText.setText("Progreso: 0%");
@@ -608,10 +571,7 @@ public class MainActivity extends Activity {
         long fileBytesWritten = 0;
         ProgressOutputStream(OutputStream out) { super(out); }
         void writeRaw(String s) throws IOException { out.write(s.getBytes("UTF-8")); }
-        void writeFile(byte[] b, int off, int len) throws IOException {
-            out.write(b, off, len);
-            fileBytesWritten += len;
-        }
+        void writeFile(byte[] b, int off, int len) throws IOException { out.write(b, off, len); fileBytesWritten += len; }
     }
 
     String readAll(InputStream in) throws Exception {
@@ -651,14 +611,9 @@ public class MainActivity extends Activity {
         double v = b;
         String[] units = {"B", "KB", "MB", "GB", "TB"};
         int i = 0;
-        while (v >= 1024 && i < units.length - 1) {
-            v /= 1024;
-            i++;
-        }
+        while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
         return String.format(Locale.US, "%.1f %s", v, units[i]);
     }
 
-    void toast(String m) {
-        Toast.makeText(this, m, Toast.LENGTH_SHORT).show();
-    }
+    void toast(String m) { Toast.makeText(this, m, Toast.LENGTH_SHORT).show(); }
 }

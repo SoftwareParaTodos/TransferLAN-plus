@@ -1,19 +1,22 @@
-# TransferLAN+ v1.2.1-beta — QR Pairing Android
+# TransferLAN+ v1.2.2-beta — QR Safe Fix
 
 **Sin cuentas. Sin nube. Sin cables.**
 
-Esta versión agrega el primer emparejamiento QR desde Android.
+Esta versión corrige los problemas detectados:
 
-## Novedades
+- El QR/pareo de la PC no se mostraba correctamente.
+- El botón QR de Android podía colgar la app y cerrarla.
 
-- Botón `Escanear QR`.
-- Soporte para link `transferlan://connect?...`.
-- Guardado automático de PC al leer el QR/link.
-- Se mantiene `Agregar PC por IP`.
-- Se mantiene PC conocida y reconexión automática.
-- Se mantiene progreso real de transferencia.
+## Solución segura
+
+Para no romper la transferencia que ya funciona, esta versión usa un sistema de emparejamiento seguro por **código/link local**:
+
+1. La PC muestra un link `transferlan://connect?...`.
+2. Android permite pegar ese link desde la opción `Pegar código de PC`.
+3. Android guarda la PC automáticamente.
+4. Después se envía normalmente.
 
 ## Importante
 
-Para escanear QR se agrega la dependencia ZXing Embedded.
-GitHub Actions compila el APK debug.
+Se desactiva temporalmente el scanner QR nativo para evitar cierres de la app.
+El QR real con cámara vuelve en una versión posterior, con permisos y librería probados.

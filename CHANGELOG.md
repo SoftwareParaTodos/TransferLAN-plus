@@ -1,11 +1,8 @@
 # Changelog
 
-## v1.1.2-beta
+## v1.1.3-beta
 
-- Corrige error de compilación Android causado por variables no finales dentro de lambdas Java.
-- Mantiene progreso real: porcentaje, MB enviados, MB totales y velocidad.
-- Mantiene experiencia visual AirDrop.
-
-## v1.1.1-beta
-
-- Agrega progreso real en Android durante el envío.
+- Agrega dispositivos conocidos en Android.
+- Agrega reconexión automática.
+- Agrega conexión manual por IP + puerto.
+- Guarda automáticamente la PC seleccionada.

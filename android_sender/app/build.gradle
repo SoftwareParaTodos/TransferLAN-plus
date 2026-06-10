@@ -10,7 +10,7 @@ android {
         applicationId 'com.transferlan.plus'
         minSdk 24
         targetSdk 35
-        versionCode 13
-        versionName '1.1.2-beta'
+        versionCode 14
+        versionName '1.1.3-beta'
     }
 }

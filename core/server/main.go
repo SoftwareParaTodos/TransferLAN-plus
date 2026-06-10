@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const version = "v1.1.3-beta"
+const version = "v1.2.1-beta"
 const httpPort = 5050
 const udpPort = 5050
 

@@ -1,13 +1,19 @@
-# TransferLAN+ v1.1.3-beta — Dispositivos conocidos
+# TransferLAN+ v1.2.1-beta — QR Pairing Android
 
 **Sin cuentas. Sin nube. Sin cables.**
 
-Mejora la conexión cuando el hotspot o router bloquea UDP broadcast.
+Esta versión agrega el primer emparejamiento QR desde Android.
 
 ## Novedades
 
-- Guardar última PC usada.
-- Reconexión automática.
-- Agregar PC por IP sin escribir URL completa.
-- Si falla el broadcast, usar dispositivo conocido.
-- Mantiene progreso real de transferencia.
+- Botón `Escanear QR`.
+- Soporte para link `transferlan://connect?...`.
+- Guardado automático de PC al leer el QR/link.
+- Se mantiene `Agregar PC por IP`.
+- Se mantiene PC conocida y reconexión automática.
+- Se mantiene progreso real de transferencia.
+
+## Importante
+
+Para escanear QR se agrega la dependencia ZXing Embedded.
+GitHub Actions compila el APK debug.

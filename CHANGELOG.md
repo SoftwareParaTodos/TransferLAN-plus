@@ -1,8 +1,9 @@
 # Changelog
 
-## v1.1.3-beta
+## v1.2.1-beta
 
-- Agrega dispositivos conocidos en Android.
-- Agrega reconexión automática.
-- Agrega conexión manual por IP + puerto.
-- Guarda automáticamente la PC seleccionada.
+- Agrega lector QR en Android usando ZXing Embedded.
+- Agrega soporte de deep link `transferlan://connect`.
+- Android puede guardar PC desde QR/link de emparejamiento.
+- Mantiene fallback manual por IP.
+- Mantiene progreso de transferencia.

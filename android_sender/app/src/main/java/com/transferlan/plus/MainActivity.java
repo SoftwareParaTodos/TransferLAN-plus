@@ -16,6 +16,9 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.content.Context;
 
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
+
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -49,14 +52,28 @@ public class MainActivity extends Activity {
         super.onCreate(b);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         buildUi();
-        handleShared(getIntent());
+        handleIntent(getIntent());
         autoConnectLastDevice();
     }
 
     @Override
     public void onNewIntent(Intent i) {
         super.onNewIntent(i);
-        handleShared(i);
+        handleIntent(i);
+    }
+
+    void handleIntent(Intent i) {
+        if (i == null) return;
+
+        if (Intent.ACTION_VIEW.equals(i.getAction()) && i.getData() != null) {
+            handlePairingUri(i.getData());
+            return;
+        }
+
+        if (Intent.ACTION_SEND.equals(i.getAction())) {
+            Uri u = i.getParcelableExtra(Intent.EXTRA_STREAM);
+            if (u != null) setSelectedFile(u);
+        }
     }
 
     void buildUi() {
@@ -83,6 +100,10 @@ public class MainActivity extends Activity {
 
         knownDeviceText = cardText("Dispositivo conocido: ninguno");
         root.addView(knownDeviceText);
+
+        Button qr = primaryButton("Escanear QR");
+        qr.setOnClickListener(v -> scanQr());
+        root.addView(qr);
 
         Button reconnect = secondaryButton("Reconectar última PC");
         reconnect.setOnClickListener(v -> autoConnectLastDevice());
@@ -157,6 +178,73 @@ public class MainActivity extends Activity {
         refreshKnownDeviceLabel();
     }
 
+    void scanQr() {
+        IntentIntegrator integrator = new IntentIntegrator(this);
+        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+        integrator.setPrompt("Escaneá el QR de TransferLAN+");
+        integrator.setBeepEnabled(false);
+        integrator.setOrientationLocked(false);
+        integrator.initiateScan();
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, Intent data) {
+        IntentResult result = IntentIntegrator.parseActivityResult(req, res, data);
+        if (result != null) {
+            String contents = result.getContents();
+            if (contents != null) {
+                handlePairingText(contents);
+            } else {
+                status.setText("Escaneo cancelado.");
+            }
+            return;
+        }
+
+        super.onActivityResult(req, res, data);
+        if (req == PICK && res == RESULT_OK && data != null) {
+            setSelectedFile(data.getData());
+        }
+    }
+
+    void handlePairingText(String text) {
+        try {
+            Uri uri = Uri.parse(text);
+            handlePairingUri(uri);
+        } catch(Exception e) {
+            status.setText("QR inválido para TransferLAN+.");
+        }
+    }
+
+    void handlePairingUri(Uri uri) {
+        if (uri == null) return;
+        if (!"transferlan".equals(uri.getScheme()) || !"connect".equals(uri.getHost())) {
+            status.setText("QR no corresponde a TransferLAN+.");
+            return;
+        }
+
+        String name = uri.getQueryParameter("name");
+        String baseUrl = uri.getQueryParameter("base_url");
+        String ip = uri.getQueryParameter("ip");
+        String port = uri.getQueryParameter("port");
+
+        if (baseUrl == null || baseUrl.length() == 0) {
+            if (ip == null || ip.length() == 0) {
+                status.setText("QR sin IP/base_url.");
+                return;
+            }
+            if (port == null || port.length() == 0) port = "5050";
+            baseUrl = "http://" + ip + ":" + port;
+        }
+
+        if (name == null || name.length() == 0) name = "PC por QR";
+
+        selectedBaseUrl = trimSlash(baseUrl);
+        selectedDeviceText.setText("Destino: " + name + " (" + selectedBaseUrl + ")");
+        saveKnownDevice(name, selectedBaseUrl);
+        status.setText("PC guardada desde QR. Probando conexión...");
+        testAndSelectDevice(selectedBaseUrl, name);
+    }
+
     TextView text(String s, int size, int r, int g, int b, boolean bold) {
         TextView t = new TextView(this);
         t.setText(s);
@@ -224,12 +312,13 @@ public class MainActivity extends Activity {
     }
 
     void autoConnectLastDevice() {
+        if (prefs == null) return;
         String base = prefs.getString(KEY_LAST_BASE, "");
         if (base.length() == 0) {
-            status.setText("No hay PC conocida guardada.");
+            if (status != null) status.setText("No hay PC conocida guardada.");
             return;
         }
-        status.setText("Probando PC conocida...");
+        if (status != null) status.setText("Probando PC conocida...");
         testAndSelectDevice(base, prefs.getString(KEY_LAST_NAME, "PC conocida"));
     }
 
@@ -278,13 +367,6 @@ public class MainActivity extends Activity {
     String trimSlash(String s) {
         while (s.endsWith("/")) s = s.substring(0, s.length()-1);
         return s;
-    }
-
-    void handleShared(Intent i) {
-        if (i != null && Intent.ACTION_SEND.equals(i.getAction())) {
-            Uri u = i.getParcelableExtra(Intent.EXTRA_STREAM);
-            if (u != null) setSelectedFile(u);
-        }
     }
 
     void setSelectedFile(Uri u) {
@@ -368,7 +450,7 @@ public class MainActivity extends Activity {
                 } catch(Exception ignored) {}
             }
             runOnUiThread(() -> {
-                if (count[0] == 0) status.setText("No se encontraron dispositivos. Usá Agregar PC por IP.");
+                if (count[0] == 0) status.setText("No se encontraron dispositivos. Usá Agregar PC por IP o Escanear QR.");
                 else status.setText("Dispositivos encontrados: " + count[0]);
             });
         }).start();
@@ -457,14 +539,6 @@ public class MainActivity extends Activity {
         startActivityForResult(i, PICK);
     }
 
-    @Override
-    protected void onActivityResult(int req, int res, Intent data) {
-        super.onActivityResult(req, res, data);
-        if (req == PICK && res == RESULT_OK && data != null) {
-            setSelectedFile(data.getData());
-        }
-    }
-
     void sendFile() {
         if (selected == null) {
             toast("Primero elegí un archivo");
@@ -473,7 +547,7 @@ public class MainActivity extends Activity {
         String base = selectedBaseUrl;
         if (base.length() == 0) base = prefs.getString(KEY_LAST_BASE, "");
         if (base.length() == 0) {
-            toast("Seleccioná una PC o agregala por IP");
+            toast("Seleccioná una PC, agregala por IP o escaneá QR");
             return;
         }
         final String finalBase = trimSlash(base);

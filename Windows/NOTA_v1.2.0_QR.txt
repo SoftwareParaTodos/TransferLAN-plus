@@ -1,0 +1,7 @@
+TransferLAN+ v1.2.0-beta Parte 1
+
+Endpoints nuevos esperados:
+- /pairing/info
+- /pairing/qr
+
+La Parte 2 agregará lector QR real en Android.

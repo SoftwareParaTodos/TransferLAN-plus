@@ -1,0 +1,13 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="96" fill="#0F172A"/>
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#38BDF8" stroke-width="10" opacity="0.55"/>
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#22C55E" stroke-width="6" opacity="0.35"/>
+  <text x="256" y="165" text-anchor="middle" font-family="Arial, sans-serif" font-size="104" font-weight="800" fill="#E5E7EB">TL</text>
+  <text x="340" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="48" font-weight="800" fill="#38BDF8">+</text>
+  <line x1="150" y1="260" x2="350" y2="260" stroke="#38BDF8" stroke-width="24" stroke-linecap="round"/>
+  <polygon points="355,260 310,234 310,286" fill="#38BDF8"/>
+  <line x1="350" y1="330" x2="150" y2="330" stroke="#22C55E" stroke-width="16" stroke-linecap="round"/>
+  <polygon points="145,330 190,304 190,356" fill="#22C55E"/>
+  <circle cx="150" cy="260" r="28" fill="#38BDF8"/>
+  <circle cx="350" cy="260" r="28" fill="#22C55E"/>
+</svg>

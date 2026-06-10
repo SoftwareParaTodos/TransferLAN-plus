@@ -1,6 +1,16 @@
-plugins { id 'com.android.application' }
+plugins {
+    id 'com.android.application'
+}
+
 android {
     namespace 'com.transferlan.plus'
     compileSdk 35
-    defaultConfig { applicationId 'com.transferlan.plus'; minSdk 24; targetSdk 35; versionCode 7; versionName '1.0.7-beta' }
+
+    defaultConfig {
+        applicationId 'com.transferlan.plus'
+        minSdk 24
+        targetSdk 35
+        versionCode 11
+        versionName '1.1.0-beta'
+    }
 }

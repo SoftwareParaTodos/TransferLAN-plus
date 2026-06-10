@@ -1,6 +1,13 @@
 # Changelog
 
-## v1.0.7-beta
-- Agrega diagnóstico de red.
-- Agrega script para regla de Firewall.
-- Agrega detección automática básica desde Android por escaneo de subred.
+## v1.1.0-beta
+
+- Rediseño Android estilo AirDrop/LocalSend.
+- Tarjetas de dispositivos detectados.
+- Se oculta la IP manual en modo avanzado.
+- Se integra logo oficial TransferLAN+.
+- Página Windows local rediseñada.
+- Endpoint `/assets/logo.png`.
+- Mejora visual del estado del servidor.
+- Mantiene UDP broadcast discovery.
+- Mantiene HTTP multipart upload.

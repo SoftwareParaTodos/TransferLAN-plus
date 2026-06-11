@@ -8,6 +8,8 @@ import android.app.NotificationManager;
 import android.os.Bundle;
 import android.os.Build;
 import android.content.Intent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
@@ -36,6 +38,7 @@ public class MainActivity extends Activity {
     static final String KEY_LAST_BASE = "last_base_url";
     static final String KEY_LAST_NAME = "last_device_name";
     static final String KEY_LAST_HISTORY = "last_history";
+    static final String TRANSFER_STATE_PREFS = "transferlan_transfer_state";
     static final String TRANSFER_CHANNEL_ID = "transferlan_transfer";
     static final int NOTIFICATION_ID_TRANSFER = 5050;
     static final int REQ_NOTIFICATIONS = 5051;
@@ -47,6 +50,7 @@ public class MainActivity extends Activity {
     TextView transferDiagnosticText;
     ProgressBar progressBar;
     Button retryButton;
+    Button cancelTransferButton;
     LinearLayout foundDevicesBox;
     LinearLayout secondaryActionsBox;
 
@@ -59,6 +63,15 @@ public class MainActivity extends Activity {
     NotificationManager notificationManager;
     WifiManager.MulticastLock multicastLock;
     Set<String> seenDeviceCards = new HashSet<>();
+
+    BroadcastReceiver transferStatusReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent == null) return;
+            if (!TransferService.ACTION_STATUS.equals(intent.getAction())) return;
+            handleTransferStatus(intent);
+        }
+    };
     boolean isSending = false;
     long lastUiProgressUpdate = 0;
 
@@ -71,6 +84,26 @@ public class MainActivity extends Activity {
         buildUi();
         handleIntent(getIntent());
         autoConnectLastDevice();
+    }
+
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        try {
+            IntentFilter f = new IntentFilter(TransferService.ACTION_STATUS);
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(transferStatusReceiver, f, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(transferStatusReceiver, f);
+            }
+        } catch(Exception ignored) {}
+    }
+
+    @Override
+    protected void onPause() {
+        try { unregisterReceiver(transferStatusReceiver); } catch(Exception ignored) {}
+        super.onPause();
     }
 
     @Override
@@ -146,6 +179,11 @@ public class MainActivity extends Activity {
         retryButton.setOnClickListener(v -> sendFile());
         root.addView(retryButton);
 
+        cancelTransferButton = secondaryButton("Cancelar transferencia");
+        cancelTransferButton.setVisibility(View.GONE);
+        cancelTransferButton.setOnClickListener(v -> cancelActiveTransfer());
+        root.addView(cancelTransferButton);
+
         status = text("Iniciando...", 15, 229,231,235, false);
         status.setPadding(0, 14, 0, 16);
         root.addView(status);
@@ -183,6 +221,7 @@ public class MainActivity extends Activity {
         scroll.addView(root);
         setContentView(scroll);
         refreshDeviceCard();
+        restoreLastTransferState();
     }
 
     void pickAndSendFlow() {
@@ -283,6 +322,107 @@ public class MainActivity extends Activity {
         }
         status.setText("Probando PC conocida...");
         testAndSelectDevice(base, prefs.getString(KEY_LAST_NAME, "PC conocida"), false);
+    }
+
+
+
+    void restoreLastTransferState() {
+        try {
+            SharedPreferences state = getSharedPreferences(TRANSFER_STATE_PREFS, MODE_PRIVATE);
+            String st = state.getString("status", "");
+            if (st.length() == 0) return;
+
+            int progress = state.getInt("progress", 0);
+            String msg = state.getString("message", "");
+            String filename = state.getString("filename", "");
+            String target = state.getString("target", "");
+            long sent = state.getLong("sent", 0);
+            long total = state.getLong("total", 0);
+
+            if (TransferService.STATUS_SENDING.equals(st) || TransferService.STATUS_PREPARING.equals(st) || TransferService.STATUS_FINALIZING.equals(st)) {
+                progressBar.setProgress(progress);
+                progressText.setText(msg.length() > 0 ? msg : "Transferencia en curso");
+                transferDiagnosticText.setText("Transferencia en curso\nArchivo: " + filename + "\nDestino: " + target + "\n" + formatBytes(sent) + " / " + formatBytes(total));
+                cancelTransferButton.setVisibility(View.VISIBLE);
+                retryButton.setVisibility(View.GONE);
+                status.setText("Transferencia en segundo plano detectada.");
+            } else if (TransferService.STATUS_COMPLETED.equals(st)) {
+                progressBar.setProgress(100);
+                progressText.setText("Última transferencia completada.");
+                transferDiagnosticText.setText("✓ Última transferencia completada\nArchivo: " + filename + "\nDestino: " + target);
+                cancelTransferButton.setVisibility(View.GONE);
+                retryButton.setVisibility(View.GONE);
+                status.setText("Última transferencia completada.");
+            } else if (TransferService.STATUS_ERROR.equals(st) || TransferService.STATUS_CANCELLED.equals(st)) {
+                progressBar.setProgress(progress);
+                progressText.setText("Última transferencia no completada.");
+                transferDiagnosticText.setText("⚠ Última transferencia no completada\nArchivo: " + filename + "\nDestino: " + target + "\nEstado: " + st);
+                cancelTransferButton.setVisibility(View.GONE);
+                retryButton.setVisibility(View.VISIBLE);
+                status.setText("Podés reintentar el envío.");
+            }
+        } catch(Exception ignored) {}
+    }
+
+    void handleTransferStatus(Intent intent) {
+        String st = intent.getStringExtra(TransferService.EXTRA_STATUS);
+        String msg = intent.getStringExtra(TransferService.EXTRA_MESSAGE);
+        int progress = intent.getIntExtra(TransferService.EXTRA_PROGRESS, 0);
+        long sent = intent.getLongExtra(TransferService.EXTRA_SENT, 0);
+        long total = intent.getLongExtra(TransferService.EXTRA_TOTAL, 0);
+
+        if (msg == null) msg = "";
+
+        if (TransferService.STATUS_PREPARING.equals(st)) {
+            progressBar.setProgress(0);
+            progressText.setText("Preparando transferencia...");
+            transferDiagnosticText.setText(msg);
+            cancelTransferButton.setVisibility(View.VISIBLE);
+            status.setText("Transferencia en segundo plano iniciada.");
+        } else if (TransferService.STATUS_SENDING.equals(st)) {
+            progressBar.setProgress(progress);
+            progressText.setText(msg);
+            transferDiagnosticText.setText("Enviando en segundo plano\n" + formatBytes(sent) + " / " + formatBytes(total));
+            cancelTransferButton.setVisibility(View.VISIBLE);
+            status.setText("Enviando archivo...");
+        } else if (TransferService.STATUS_FINALIZING.equals(st)) {
+            progressBar.setProgress(99);
+            progressText.setText("Finalizando...");
+            transferDiagnosticText.setText(msg);
+            cancelTransferButton.setVisibility(View.VISIBLE);
+            status.setText("Esperando confirmación de la PC.");
+        } else if (TransferService.STATUS_COMPLETED.equals(st)) {
+            progressBar.setProgress(100);
+            progressText.setText("Transferencia completada.");
+            transferDiagnosticText.setText("✓ Archivo recibido por la PC");
+            cancelTransferButton.setVisibility(View.GONE);
+            retryButton.setVisibility(View.GONE);
+            status.setText("Archivo enviado correctamente.");
+            addLocalHistory("✓ Transferencia completada en segundo plano");
+        } else if (TransferService.STATUS_CANCELLED.equals(st)) {
+            progressText.setText("Transferencia cancelada.");
+            transferDiagnosticText.setText("La transferencia fue cancelada.");
+            cancelTransferButton.setVisibility(View.GONE);
+            retryButton.setVisibility(View.VISIBLE);
+            status.setText("Transferencia cancelada.");
+        } else if (TransferService.STATUS_ERROR.equals(st)) {
+            progressText.setText("Transferencia interrumpida.");
+            transferDiagnosticText.setText("No se pudo completar. Podés reintentar.");
+            cancelTransferButton.setVisibility(View.GONE);
+            retryButton.setVisibility(View.VISIBLE);
+            status.setText("Transferencia interrumpida.");
+        }
+    }
+
+    void cancelActiveTransfer() {
+        try {
+            Intent i = new Intent(this, TransferService.class);
+            i.setAction(TransferService.ACTION_CANCEL);
+            startService(i);
+            status.setText("Cancelando transferencia...");
+        } catch(Exception e) {
+            status.setText("No se pudo cancelar: " + e.getMessage());
+        }
     }
 
     void showPasteCodeDialog() {
@@ -611,6 +751,7 @@ public class MainActivity extends Activity {
     }
 
 
+
     void sendFile() {
         if (isSending) {
             toast("Ya hay una transferencia en curso.");
@@ -630,60 +771,42 @@ public class MainActivity extends Activity {
             return;
         }
 
-        final String finalBase = trimSlash(base);
-        progressBar.setProgress(0);
+        String targetName = selectedDeviceName.length() > 0 ? selectedDeviceName : prefs.getString(KEY_LAST_NAME, "PC");
+        String filename = fileName(selected);
+        String finalBase = trimSlash(base);
+
+        progressBar.setProgress(1);
         retryButton.setVisibility(View.GONE);
-        progressText.setText("Preparando envío...");
-        String targetName = selectedDeviceName.length() > 0 ? selectedDeviceName : prefs.getString(KEY_LAST_NAME, "la PC");
-        transferDiagnosticText.setText("Preparando transferencia:\nDestino: " + targetName + "\nArchivo: " + fileName(selected) + "\nTamaño: " + formatBytes(selectedSize));
-        status.setText("Enviando a " + targetName + "...");
+        progressText.setText("Transferencia iniciada en segundo plano.");
+        cancelTransferButton.setVisibility(View.VISIBLE);
+        transferDiagnosticText.setText("Enviando en segundo plano:\nDestino: " + targetName + "\nArchivo: " + filename + "\nTamaño: " + formatBytes(selectedSize));
+        status.setText("TransferService está enviando el archivo.");
 
-        isSending = true;
-        lastUiProgressUpdate = 0;
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        showTransferNotification("Preparando envío", fileName(selected), 0, true);
-        startTransferServiceFoundation(fileName(selected), selectedDeviceName.length() > 0 ? selectedDeviceName : "PC");
+        try {
+            Intent i = new Intent(this, TransferService.class);
+            i.setAction(TransferService.ACTION_START);
+            i.putExtra(TransferService.EXTRA_FILE_URI, selected.toString());
+            i.putExtra(TransferService.EXTRA_BASE_URL, finalBase);
+            i.putExtra(TransferService.EXTRA_FILENAME, filename);
+            i.putExtra(TransferService.EXTRA_TARGET, targetName);
+            i.putExtra(TransferService.EXTRA_SIZE, selectedSize);
 
-        new Thread(() -> {
-            long start = System.currentTimeMillis();
-            try {
-                upload(finalBase, selected, start);
-                long elapsed = Math.max(1, System.currentTimeMillis() - start);
-                double avg = selectedSize / 1024.0 / 1024.0 / (elapsed / 1000.0);
-                final String summary = "✓ Archivo enviado\n" + fileName(selected) + "\n" + formatBytes(selectedSize) + " · " + String.format(Locale.US, "%.1f MB/s", avg);
-                runOnUiThread(() -> {
-                    isSending = false;
-                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                    showTransferNotification("Transferencia completada", fileName(selected), 100, false);
-                    stopTransferServiceFoundation();
-                    progressBar.setProgress(100);
-                    progressText.setText("Transferencia completada.");
-                    transferDiagnosticText.setText("✓ Transferencia confirmada por la PC\n" + fileName(selected) + "\n" + formatBytes(selectedSize));
-                    status.setText("Archivo enviado correctamente.");
-                    retryButton.setVisibility(View.GONE);
-                    addLocalHistory(summary);
-                    showMessage("Transferencia completada", summary);
-                    selected = null;
-                    selectedSize = 0;
-                    selectedFileText.setText("Archivo: ninguno seleccionado");
-                });
-            } catch(Exception e) {
-                final String error = e.getMessage() == null ? "Error desconocido" : e.getMessage();
-                runOnUiThread(() -> {
-                    isSending = false;
-                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                    showTransferNotification("Transferencia interrumpida", "Podés reintentar el envío", 0, false);
-                    stopTransferServiceFoundation();
-                    status.setText("No se pudo completar el envío: " + error);
-                    progressText.setText("Transferencia interrumpida. Podés reintentar.");
-                    transferDiagnosticText.setText("⚠ Transferencia fallida\nArchivo conservado: " + fileName(selected) + "\nTamaño: " + formatBytes(selectedSize) + "\nMotivo: " + error);
-                    retryButton.setVisibility(View.VISIBLE);
-                    toast("No se pudo enviar. Podés reintentar.");
-                });
-            }
-        }).start();
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
+            else startService(i);
+
+            addLocalHistory("↗ Envío iniciado en segundo plano\n" + filename + "\n" + formatBytes(selectedSize));
+            showMessage("Envío iniciado", "La transferencia sigue desde la notificación de TransferLAN+.");
+            selected = null;
+            selectedSize = 0;
+            selectedFileText.setText("Archivo: ninguno seleccionado");
+            progressBar.setProgress(0);
+            progressText.setText("El envío continúa en segundo plano.");
+        } catch(Exception e) {
+            retryButton.setVisibility(View.VISIBLE);
+            status.setText("No se pudo iniciar servicio: " + e.getMessage());
+            progressText.setText("No se pudo iniciar transferencia. Podés reintentar.");
+        }
     }
-
 
     void upload(String base, Uri uri, long startTime) throws Exception {
         String boundary = "TransferLANBoundary" + System.currentTimeMillis();

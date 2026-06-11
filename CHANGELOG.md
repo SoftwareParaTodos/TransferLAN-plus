@@ -1,12 +1,9 @@
 # Changelog
 
-## v1.5.1-beta
+## v1.5.4-beta
 
-- Agrega base de ForegroundService para transferencias largas.
-- Agrega `TransferService.java`.
-- Agrega permisos Android:
-  - `FOREGROUND_SERVICE`
-  - `WAKE_LOCK`
-- Agrega notificación persistente/cancelable preparada.
-- Mantiene compatibilidad con v1.5.0.
-- Prepara migración completa del upload al servicio.
+- Agrega persistencia básica de estado de transferencia.
+- MainActivity recupera el estado al abrir.
+- Mejora pantalla si hay transferencia en curso.
+- Mejora estados post-cierre: completado, fallido o cancelado.
+- Mantiene Service Status Bridge.

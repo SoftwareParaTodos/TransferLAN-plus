@@ -1,26 +1,29 @@
-# TransferLAN+ v1.5.1-beta — Foreground Service Foundation
+# TransferLAN+ v1.5.4-beta — Transfer State Recovery
 
 **Sin cuentas. Sin nube. Sin cables.**
 
-Esta versión prepara la arquitectura real para transferencias en segundo plano.
+Esta versión mejora la recuperación visual de transferencias cuando Android vuelve a abrir la app.
 
 ## Cambios principales
 
-- Agrega `TransferService.java`.
-- Declara Foreground Service en AndroidManifest.
-- Agrega permiso `FOREGROUND_SERVICE`.
-- Agrega permiso `WAKE_LOCK`.
-- Agrega notificación persistente de transferencia.
-- Agrega acción de cancelación preparada.
-- Mantiene el flujo actual de envío funcionando.
-- Mantiene notificación de progreso desde Activity.
-- Deja el proyecto listo para migrar el upload completo al servicio en la próxima fase.
+- `TransferService` guarda el último estado de transferencia.
+- `MainActivity` lee el último estado al abrir.
+- Si hay una transferencia en curso, la pantalla lo muestra.
+- Si la última transferencia terminó, se muestra como completada.
+- Si falló o fue cancelada, se muestra con opción de reintentar.
+- Se guarda:
+  - estado;
+  - progreso;
+  - mensaje;
+  - archivo;
+  - destino;
+  - enviados;
+  - total;
+  - hora.
+- Mantiene progreso por notificación.
+- Mantiene botón cancelar.
+- Mantiene envío desde servicio.
 
-## Importante
+## Objetivo
 
-Esta es una versión de transición segura:
-- no rompe el envío actual;
-- agrega la base del servicio;
-- evita hacer un cambio gigante de golpe.
-
-La próxima versión moverá definitivamente el upload pesado desde `MainActivity` hacia `TransferService`.
+Que el usuario pueda volver a abrir TransferLAN+ y entender qué pasó con su transferencia.

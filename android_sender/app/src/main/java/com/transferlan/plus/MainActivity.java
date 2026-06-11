@@ -30,17 +30,25 @@ public class MainActivity extends Activity {
     static final String KEY_LAST_NAME = "last_device_name";
     static final String KEY_LAST_HISTORY = "last_history";
 
-    EditText ipInput, portInput;
-    TextView status, selectedDeviceText, selectedFileText, progressText, knownDeviceText;
+    TextView status;
+    TextView deviceCard;
+    TextView selectedFileText;
+    TextView progressText;
     ProgressBar progressBar;
-    LinearLayout devices, manualBox;
+    LinearLayout foundDevicesBox;
+    LinearLayout secondaryActionsBox;
+
     Uri selected;
     long selectedSize = 0;
     String selectedBaseUrl = "";
+    String selectedDeviceName = "";
+
     SharedPreferences prefs;
     WifiManager.MulticastLock multicastLock;
+    Set<String> seenDeviceCards = new HashSet<>();
 
-    @Override public void onCreate(Bundle b) {
+    @Override
+    public void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         buildUi();
@@ -48,17 +56,20 @@ public class MainActivity extends Activity {
         autoConnectLastDevice();
     }
 
-    @Override public void onNewIntent(Intent i) {
+    @Override
+    public void onNewIntent(Intent i) {
         super.onNewIntent(i);
         handleIntent(i);
     }
 
     void handleIntent(Intent i) {
         if (i == null) return;
+
         if (Intent.ACTION_VIEW.equals(i.getAction()) && i.getData() != null) {
             handlePairingUri(i.getData());
             return;
         }
+
         if (Intent.ACTION_SEND.equals(i.getAction())) {
             Uri u = i.getParcelableExtra(Intent.EXTRA_STREAM);
             if (u != null) setSelectedFile(u);
@@ -74,12 +85,12 @@ public class MainActivity extends Activity {
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(getResources().getIdentifier("transferlan_logo", "drawable", getPackageName()));
-        LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(180, 180);
+        LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(150, 150);
         logoParams.gravity = Gravity.CENTER_HORIZONTAL;
         logo.setLayoutParams(logoParams);
         root.addView(logo);
 
-        TextView title = text("TransferLAN+", 30, 229,231,235, true);
+        TextView title = text("TransferLAN+", 31, 229,231,235, true);
         title.setGravity(Gravity.CENTER_HORIZONTAL);
         root.addView(title);
 
@@ -87,36 +98,17 @@ public class MainActivity extends Activity {
         sub.setGravity(Gravity.CENTER_HORIZONTAL);
         root.addView(sub);
 
-        knownDeviceText = cardText("Dispositivo conocido: ninguno");
-        root.addView(knownDeviceText);
+        TextView section = text("Mis dispositivos", 19, 229,231,235, true);
+        section.setPadding(0, 26, 0, 8);
+        root.addView(section);
 
-        Button pasteCode = primaryButton("Pegar código de PC");
-        pasteCode.setOnClickListener(v -> showPasteCodeDialog());
-        root.addView(pasteCode);
+        deviceCard = cardText("Buscando PC conocida...");
+        root.addView(deviceCard);
 
-        Button reconnect = secondaryButton("Reconectar última PC");
-        reconnect.setOnClickListener(v -> autoConnectLastDevice());
-        root.addView(reconnect);
-
-        Button history = secondaryButton("Ver historial local");
-        history.setOnClickListener(v -> showLocalHistory());
-        root.addView(history);
-
-        Button scan = primaryButton("Buscar dispositivos");
-        scan.setOnClickListener(v -> discoverDevices());
-        root.addView(scan);
-
-        devices = new LinearLayout(this);
-        devices.setOrientation(LinearLayout.VERTICAL);
-        devices.setPadding(0, 14, 0, 14);
-        root.addView(devices);
-
-        selectedDeviceText = cardText("Destino: ningún dispositivo seleccionado");
-        root.addView(selectedDeviceText);
-
-        Button pick = primaryButton("Elegir archivo");
-        pick.setOnClickListener(v -> pickFile());
-        root.addView(pick);
+        Button sendBig = primaryButton("Enviar archivo");
+        sendBig.setTextSize(18);
+        sendBig.setOnClickListener(v -> pickAndSendFlow());
+        root.addView(sendBig);
 
         selectedFileText = cardText("Archivo: ninguno seleccionado");
         root.addView(selectedFileText);
@@ -126,49 +118,146 @@ public class MainActivity extends Activity {
         progressBar.setProgress(0);
         root.addView(progressBar);
 
-        progressText = text("Progreso: 0%", 14, 148,163,184, false);
+        progressText = text("Listo para enviar.", 14, 148,163,184, false);
         root.addView(progressText);
 
-        Button send = primaryButton("Enviar");
-        send.setOnClickListener(v -> sendFile());
-        root.addView(send);
-
-        Button manual = secondaryButton("Agregar PC por IP");
-        manual.setOnClickListener(v -> toggleManual());
-        root.addView(manual);
-
-        manualBox = new LinearLayout(this);
-        manualBox.setOrientation(LinearLayout.VERTICAL);
-        manualBox.setVisibility(View.GONE);
-
-        ipInput = new EditText(this);
-        ipInput.setHint("IP de la PC, ej: 10.92.222.190");
-        ipInput.setSingleLine(true);
-        ipInput.setTextColor(Color.WHITE);
-        ipInput.setHintTextColor(Color.GRAY);
-        manualBox.addView(ipInput);
-
-        portInput = new EditText(this);
-        portInput.setHint("Puerto");
-        portInput.setText("5050");
-        portInput.setSingleLine(true);
-        portInput.setTextColor(Color.WHITE);
-        portInput.setHintTextColor(Color.GRAY);
-        manualBox.addView(portInput);
-
-        Button connect = primaryButton("Guardar y conectar");
-        connect.setOnClickListener(v -> connectManualIp());
-        manualBox.addView(connect);
-
-        root.addView(manualBox);
-
-        status = text("Listo.", 15, 229,231,235, false);
-        status.setPadding(0, 22, 0, 0);
+        status = text("Iniciando...", 15, 229,231,235, false);
+        status.setPadding(0, 14, 0, 16);
         root.addView(status);
+
+        TextView secondaryTitle = text("¿No aparece tu dispositivo?", 17, 229,231,235, true);
+        secondaryTitle.setPadding(0, 20, 0, 6);
+        root.addView(secondaryTitle);
+
+        secondaryActionsBox = new LinearLayout(this);
+        secondaryActionsBox.setOrientation(LinearLayout.VERTICAL);
+
+        Button searchAgain = secondaryButton("Buscar nuevamente");
+        searchAgain.setOnClickListener(v -> discoverDevices());
+        secondaryActionsBox.addView(searchAgain);
+
+        Button pasteCode = secondaryButton("Pegar código de PC");
+        pasteCode.setOnClickListener(v -> showPasteCodeDialog());
+        secondaryActionsBox.addView(pasteCode);
+
+        Button addIp = secondaryButton("Agregar por IP");
+        addIp.setOnClickListener(v -> showManualIpDialog());
+        secondaryActionsBox.addView(addIp);
+
+        Button history = secondaryButton("Ver historial local");
+        history.setOnClickListener(v -> showLocalHistory());
+        secondaryActionsBox.addView(history);
+
+        root.addView(secondaryActionsBox);
+
+        foundDevicesBox = new LinearLayout(this);
+        foundDevicesBox.setOrientation(LinearLayout.VERTICAL);
+        foundDevicesBox.setPadding(0, 16, 0, 0);
+        root.addView(foundDevicesBox);
 
         scroll.addView(root);
         setContentView(scroll);
-        refreshKnownDeviceLabel();
+        refreshDeviceCard();
+    }
+
+    void pickAndSendFlow() {
+        if (selectedBaseUrl.length() == 0) {
+            String base = prefs.getString(KEY_LAST_BASE, "");
+            if (base.length() > 0) {
+                selectedBaseUrl = base;
+                selectedDeviceName = prefs.getString(KEY_LAST_NAME, "PC conocida");
+            } else {
+                toast("Primero conectá una PC.");
+                showManualIpDialog();
+                return;
+            }
+        }
+
+        if (selected == null) {
+            pickFile();
+        } else {
+            sendFile();
+        }
+    }
+
+    TextView text(String s, int size, int r, int g, int b, boolean bold) {
+        TextView t = new TextView(this);
+        t.setText(s);
+        t.setTextSize(size);
+        t.setTextColor(Color.rgb(r,g,b));
+        t.setPadding(0, 8, 0, 8);
+        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        return t;
+    }
+
+    TextView cardText(String s) {
+        TextView t = text(s, 15, 229,231,235, false);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.rgb(17,24,39));
+        bg.setCornerRadius(24);
+        bg.setStroke(2, Color.rgb(51,65,85));
+        t.setBackground(bg);
+        t.setPadding(22, 20, 22, 20);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 8, 0, 12);
+        t.setLayoutParams(lp);
+        return t;
+    }
+
+    Button primaryButton(String label) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setTextColor(Color.rgb(0,17,31));
+        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        b.setAllCaps(false);
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{Color.rgb(56,189,248), Color.rgb(34,197,94)});
+        bg.setCornerRadius(20);
+        b.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 12, 0, 8);
+        b.setLayoutParams(lp);
+        return b;
+    }
+
+    Button secondaryButton(String label) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setTextColor(Color.rgb(229,231,235));
+        b.setAllCaps(false);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.rgb(31,41,55));
+        bg.setCornerRadius(18);
+        bg.setStroke(2, Color.rgb(51,65,85));
+        b.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 8, 0, 6);
+        b.setLayoutParams(lp);
+        return b;
+    }
+
+    void refreshDeviceCard() {
+        String base = prefs.getString(KEY_LAST_BASE, "");
+        String name = prefs.getString(KEY_LAST_NAME, "");
+        if (selectedBaseUrl.length() > 0) {
+            if (selectedDeviceName.length() == 0) selectedDeviceName = "PC conectada";
+            deviceCard.setText("✓ " + selectedDeviceName + "\nDisponible\nLista para recibir archivos");
+        } else if (base.length() > 0) {
+            if (name.length() == 0) name = "PC conocida";
+            deviceCard.setText("⭐ " + name + "\nProbando conexión...\nGuardada anteriormente");
+        } else {
+            deviceCard.setText("No hay PC conectada todavía.\nUsá Buscar nuevamente, Pegar código de PC o Agregar por IP.");
+        }
+    }
+
+    void autoConnectLastDevice() {
+        String base = prefs.getString(KEY_LAST_BASE, "");
+        if (base.length() == 0) {
+            status.setText("No hay PC conocida. Podés agregar una por IP o pegar código.");
+            refreshDeviceCard();
+            return;
+        }
+        status.setText("Probando PC conocida...");
+        testAndSelectDevice(base, prefs.getString(KEY_LAST_NAME, "PC conocida"), false);
     }
 
     void showPasteCodeDialog() {
@@ -221,99 +310,47 @@ public class MainActivity extends Activity {
         }
 
         if (name == null || name.length() == 0) name = "PC por código";
-        selectedBaseUrl = trimSlash(baseUrl);
-        selectedDeviceText.setText("Destino: " + name + " (" + selectedBaseUrl + ")");
-        saveKnownDevice(name, selectedBaseUrl);
         status.setText("PC guardada. Probando conexión...");
-        testAndSelectDevice(selectedBaseUrl, name);
+        testAndSelectDevice(baseUrl, name, true);
     }
 
-    TextView text(String s, int size, int r, int g, int b, boolean bold) {
-        TextView t = new TextView(this);
-        t.setText(s);
-        t.setTextSize(size);
-        t.setTextColor(Color.rgb(r,g,b));
-        t.setPadding(0, 8, 0, 8);
-        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        return t;
+    void showManualIpDialog() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+
+        final EditText ipInput = new EditText(this);
+        ipInput.setHint("IP de la PC, ej: 192.168.1.107");
+        ipInput.setSingleLine(true);
+        ipInput.setTextColor(Color.BLACK);
+        box.addView(ipInput);
+
+        final EditText portInput = new EditText(this);
+        portInput.setHint("Puerto");
+        portInput.setText("5050");
+        portInput.setSingleLine(true);
+        portInput.setTextColor(Color.BLACK);
+        box.addView(portInput);
+
+        new AlertDialog.Builder(this)
+            .setTitle("Agregar PC por IP")
+            .setMessage("Usalo solo si no aparece automáticamente.")
+            .setView(box)
+            .setPositiveButton("Conectar", (dialog, which) -> {
+                String ip = ipInput.getText().toString().trim();
+                String port = portInput.getText().toString().trim();
+                if (ip.length() == 0) {
+                    toast("Poné la IP de la PC");
+                    return;
+                }
+                if (port.length() == 0) port = "5050";
+                String base = (ip.startsWith("http://") || ip.startsWith("https://")) ? ip : "http://" + ip + ":" + port;
+                testAndSelectDevice(base, "PC manual", true);
+            })
+            .setNegativeButton("Cancelar", null)
+            .show();
     }
 
-    TextView cardText(String s) {
-        TextView t = text(s, 15, 229,231,235, false);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.rgb(17,24,39));
-        bg.setCornerRadius(22);
-        bg.setStroke(2, Color.rgb(51,65,85));
-        t.setBackground(bg);
-        t.setPadding(22, 18, 22, 18);
-        return t;
-    }
-
-    Button primaryButton(String label) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setTextColor(Color.rgb(0,17,31));
-        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        b.setAllCaps(false);
-        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{Color.rgb(56,189,248), Color.rgb(34,197,94)});
-        bg.setCornerRadius(18);
-        b.setBackground(bg);
-        return b;
-    }
-
-    Button secondaryButton(String label) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setTextColor(Color.rgb(229,231,235));
-        b.setAllCaps(false);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.rgb(31,41,55));
-        bg.setCornerRadius(18);
-        bg.setStroke(2, Color.rgb(51,65,85));
-        b.setBackground(bg);
-        return b;
-    }
-
-    void toggleManual() { manualBox.setVisibility(manualBox.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE); }
-
-    void refreshKnownDeviceLabel() {
-        String base = prefs.getString(KEY_LAST_BASE, "");
-        String name = prefs.getString(KEY_LAST_NAME, "");
-        if (base.length() > 0) {
-            if (name.length() == 0) name = "PC conocida";
-            knownDeviceText.setText("Dispositivo conocido: " + name + " (" + base + ")");
-        } else {
-            knownDeviceText.setText("Dispositivo conocido: ninguno");
-        }
-    }
-
-    void saveKnownDevice(String name, String baseUrl) {
-        prefs.edit().putString(KEY_LAST_NAME, name).putString(KEY_LAST_BASE, baseUrl).apply();
-        refreshKnownDeviceLabel();
-    }
-
-    void autoConnectLastDevice() {
-        if (prefs == null || status == null) return;
-        String base = prefs.getString(KEY_LAST_BASE, "");
-        if (base.length() == 0) {
-            status.setText("No hay PC conocida guardada.");
-            return;
-        }
-        status.setText("Probando PC conocida...");
-        testAndSelectDevice(base, prefs.getString(KEY_LAST_NAME, "PC conocida"));
-    }
-
-    void connectManualIp() {
-        String ip = ipInput.getText().toString().trim();
-        String port = portInput.getText().toString().trim();
-        if (ip.length() == 0) { toast("Poné la IP de la PC"); return; }
-        if (port.length() == 0) port = "5050";
-        String base = (ip.startsWith("http://") || ip.startsWith("https://")) ? ip : "http://" + ip + ":" + port;
-        status.setText("Probando conexión...");
-        testAndSelectDevice(base, "PC manual");
-    }
-
-    void testAndSelectDevice(String base, String fallbackName) {
+    void testAndSelectDevice(String base, String fallbackName, boolean showResult) {
         final String finalBase = trimSlash(base);
         final String finalFallbackName = fallbackName;
         new Thread(() -> {
@@ -328,32 +365,48 @@ public class MainActivity extends Activity {
                     final String finalName = name;
                     runOnUiThread(() -> {
                         selectedBaseUrl = finalBase;
-                        selectedDeviceText.setText("Destino: " + finalName + " (" + finalBase + ")");
+                        selectedDeviceName = finalName;
                         saveKnownDevice(finalName, finalBase);
+                        refreshDeviceCard();
                         status.setText("PC conectada correctamente.");
+                        if (showResult) toast("PC conectada: " + finalName);
                     });
                 } else {
                     runOnUiThread(() -> status.setText("La PC respondió con error."));
                 }
                 c.disconnect();
             } catch(Exception e) {
-                runOnUiThread(() -> status.setText("No se pudo conectar: " + e.getMessage()));
+                runOnUiThread(() -> {
+                    status.setText("No se pudo conectar. Revisá Wi-Fi, Firewall o IP.");
+                    refreshDeviceCard();
+                });
             }
         }).start();
     }
 
-    String trimSlash(String s) { while (s.endsWith("/")) s = s.substring(0, s.length()-1); return s; }
+    void saveKnownDevice(String name, String baseUrl) {
+        prefs.edit().putString(KEY_LAST_NAME, name).putString(KEY_LAST_BASE, baseUrl).apply();
+    }
+
+    String trimSlash(String s) {
+        while (s.endsWith("/")) s = s.substring(0, s.length()-1);
+        return s;
+    }
 
     void setSelectedFile(Uri u) {
         selected = u;
         selectedSize = fileSize(u);
         selectedFileText.setText("Archivo: " + fileName(u) + " (" + formatBytes(selectedSize) + ")");
         progressBar.setProgress(0);
-        progressText.setText("Progreso: 0%");
+        progressText.setText("Archivo listo. Tocá Enviar archivo para comenzar.");
+        if (selectedBaseUrl.length() > 0 || prefs.getString(KEY_LAST_BASE, "").length() > 0) {
+            sendFile();
+        }
     }
 
     void discoverDevices() {
-        devices.removeAllViews();
+        foundDevicesBox.removeAllViews();
+        seenDeviceCards.clear();
         status.setText("Buscando dispositivos...");
         new Thread(() -> {
             final Set<String> found = new HashSet<>();
@@ -363,9 +416,14 @@ public class MainActivity extends Activity {
                 socket.setBroadcast(true);
                 socket.setSoTimeout(1200);
                 byte[] data = DISCOVERY_MESSAGE.getBytes("UTF-8");
-                for (InetAddress target : broadcastTargets()) socket.send(new DatagramPacket(data, data.length, target, DISCOVERY_PORT));
+
+                for (InetAddress target : broadcastTargets()) {
+                    socket.send(new DatagramPacket(data, data.length, target, DISCOVERY_PORT));
+                }
+
                 long end = System.currentTimeMillis() + 2500;
                 byte[] buffer = new byte[4096];
+
                 while (System.currentTimeMillis() < end) {
                     try {
                         DatagramPacket response = new DatagramPacket(buffer, buffer.length);
@@ -373,7 +431,7 @@ public class MainActivity extends Activity {
                         String body = new String(response.getData(), 0, response.getLength(), "UTF-8");
                         String base = extract(body, "base_url");
                         if (base.length() == 0) base = "http://" + response.getAddress().getHostAddress() + ":5050";
-                        final String finalBase = base;
+                        final String finalBase = trimSlash(base);
                         final String finalBody = body;
                         if (!found.contains(finalBase)) {
                             found.add(finalBase);
@@ -383,10 +441,11 @@ public class MainActivity extends Activity {
                 }
                 socket.close();
             } catch(Exception e) {
-                runOnUiThread(() -> status.setText("Error buscando: " + e.getMessage()));
+                runOnUiThread(() -> status.setText("Broadcast no disponible. Probando respaldo..."));
             } finally {
                 releaseMulticastLock();
             }
+
             if (found.size() == 0) {
                 runOnUiThread(() -> {
                     status.setText("No apareció por broadcast. Probando PC conocida y respaldo...");
@@ -408,12 +467,13 @@ public class MainActivity extends Activity {
             }
             String prefix = ip.substring(0, ip.lastIndexOf(".") + 1);
             final int[] count = {0};
+
             for (int i=1; i<=254; i++) {
                 String base = "http://" + prefix + i + ":5050";
                 try {
                     HttpURLConnection c = (HttpURLConnection)new URL(base + "/device/info").openConnection();
-                    c.setConnectTimeout(180);
-                    c.setReadTimeout(250);
+                    c.setConnectTimeout(160);
+                    c.setReadTimeout(220);
                     if (c.getResponseCode() == 200) {
                         String body = readAll(c.getInputStream());
                         count[0]++;
@@ -422,32 +482,39 @@ public class MainActivity extends Activity {
                     c.disconnect();
                 } catch(Exception ignored) {}
             }
+
             runOnUiThread(() -> {
-                if (count[0] == 0) status.setText("No se encontraron dispositivos. Usá Agregar PC por IP o Pegar código.");
+                if (count[0] == 0) status.setText("No se encontraron dispositivos. Usá Pegar código de PC o Agregar por IP.");
                 else status.setText("Dispositivos encontrados: " + count[0]);
             });
         }).start();
     }
 
     void addDeviceCard(String base, String body) {
+        final String deviceBase = trimSlash(base);
+        if (seenDeviceCards.contains(deviceBase)) return;
+        seenDeviceCards.add(deviceBase);
+
         String parsedName = extract(body, "name");
         String parsedOs = extract(body, "os");
         String parsedVersion = extract(body, "version");
+
         if (parsedName.length() == 0) parsedName = "Computadora encontrada";
         if (parsedOs.length() == 0) parsedOs = "desktop";
+
         final String deviceName = parsedName;
         final String deviceOs = parsedOs;
         final String deviceVersion = parsedVersion;
-        final String deviceBase = trimSlash(base);
 
-        Button b = secondaryButton("🖥  " + deviceName + "\n" + deviceOs + " · " + deviceVersion + "\nSeleccionar");
+        Button b = secondaryButton("🖥  " + deviceName + "\n" + deviceOs + " · " + deviceVersion + "\nUsar este dispositivo");
         b.setOnClickListener(v -> {
             selectedBaseUrl = deviceBase;
-            selectedDeviceText.setText("Destino: " + deviceName + " (" + deviceBase + ")");
+            selectedDeviceName = deviceName;
             saveKnownDevice(deviceName, deviceBase);
+            refreshDeviceCard();
             status.setText("Dispositivo seleccionado y guardado.");
         });
-        devices.addView(b);
+        foundDevicesBox.addView(b);
     }
 
     List<InetAddress> broadcastTargets() {
@@ -470,7 +537,9 @@ public class MainActivity extends Activity {
     }
 
     void releaseMulticastLock() {
-        try { if (multicastLock != null && multicastLock.isHeld()) multicastLock.release(); } catch(Exception ignored) {}
+        try {
+            if (multicastLock != null && multicastLock.isHeld()) multicastLock.release();
+        } catch(Exception ignored) {}
     }
 
     String extract(String json, String key) {
@@ -508,70 +577,98 @@ public class MainActivity extends Activity {
         startActivityForResult(i, PICK);
     }
 
-    @Override protected void onActivityResult(int req, int res, Intent data) {
+    @Override
+    protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
         if (req == PICK && res == RESULT_OK && data != null) setSelectedFile(data.getData());
     }
 
     void sendFile() {
-        if (selected == null) { toast("Primero elegí un archivo"); return; }
+        if (selected == null) {
+            pickFile();
+            return;
+        }
+
         String base = selectedBaseUrl;
         if (base.length() == 0) base = prefs.getString(KEY_LAST_BASE, "");
-        if (base.length() == 0) { toast("Seleccioná una PC, agregala por IP o pegá código"); return; }
+        if (base.length() == 0) {
+            toast("Primero conectá una PC.");
+            showManualIpDialog();
+            return;
+        }
+
         final String finalBase = trimSlash(base);
         progressBar.setProgress(0);
-        progressText.setText("Progreso: 0%");
-        status.setText("Enviando...");
+        progressText.setText("Preparando envío...");
+        status.setText("Enviando a " + (selectedDeviceName.length() > 0 ? selectedDeviceName : "la PC") + "...");
+
         new Thread(() -> {
+            long start = System.currentTimeMillis();
             try {
-                upload(finalBase, selected);
+                upload(finalBase, selected, start);
+                long elapsed = Math.max(1, System.currentTimeMillis() - start);
+                double avg = selectedSize / 1024.0 / 1024.0 / (elapsed / 1000.0);
+                final String summary = "✓ Archivo enviado\n" + fileName(selected) + "\n" + formatBytes(selectedSize) + " · " + String.format(Locale.US, "%.1f MB/s", avg);
                 runOnUiThread(() -> {
                     progressBar.setProgress(100);
-                    progressText.setText("Progreso: 100% · Completado");
-                    String summary = "✓ Archivo enviado: " + fileName(selected) + " (" + formatBytes(selectedSize) + ")";
-                    status.setText(summary);
+                    progressText.setText("Transferencia completada.");
+                    status.setText("Archivo enviado correctamente.");
                     addLocalHistory(summary);
                     showMessage("Transferencia completada", summary);
+                    selected = null;
+                    selectedSize = 0;
+                    selectedFileText.setText("Archivo: ninguno seleccionado");
                 });
             } catch(Exception e) {
-                runOnUiThread(() -> status.setText("Error: " + e.getMessage()));
+                runOnUiThread(() -> status.setText("Error enviando: " + e.getMessage()));
             }
         }).start();
     }
 
-    void upload(String base, Uri uri) throws Exception {
+    void upload(String base, Uri uri, long startTime) throws Exception {
         String boundary = "TransferLANBoundary" + System.currentTimeMillis();
         HttpURLConnection c = (HttpURLConnection)new URL(base + "/transfer/upload").openConnection();
         c.setRequestMethod("POST");
         c.setDoOutput(true);
         c.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+
         InputStream in = getContentResolver().openInputStream(uri);
         if (in == null) throw new Exception("No se pudo abrir archivo");
+
         ProgressOutputStream out = new ProgressOutputStream(c.getOutputStream());
         String fn = fileName(uri);
+
         out.writeRaw("--" + boundary + "\r\n");
         out.writeRaw("Content-Disposition: form-data; name=\"file\"; filename=\"" + fn + "\"\r\n");
         out.writeRaw("Content-Type: application/octet-stream\r\n\r\n");
+
         byte[] buf = new byte[1024 * 256];
         int n;
-        long start = System.currentTimeMillis();
+
         while ((n = in.read(buf)) > 0) {
             out.writeFile(buf, 0, n);
-            updateProgress(out.fileBytesWritten, selectedSize, Math.max(1, System.currentTimeMillis() - start));
+            updateProgress(out.fileBytesWritten, selectedSize, Math.max(1, System.currentTimeMillis() - startTime));
         }
+
         in.close();
         out.writeRaw("\r\n--" + boundary + "--\r\n");
         out.close();
+
+        runOnUiThread(() -> {
+            progressBar.setProgress(99);
+            progressText.setText("Finalizando... esperando confirmación de la PC");
+        });
+
         int code = c.getResponseCode();
         if (code < 200 || code > 299) throw new Exception("HTTP " + code);
     }
 
     void updateProgress(long sent, long total, long elapsedMs) {
-        int percent = total > 0 ? (int)Math.min(100, (sent * 100) / total) : 0;
+        int percent = total > 0 ? (int)Math.min(99, (sent * 100) / total) : 0;
         double mbps = sent / 1024.0 / 1024.0 / (elapsedMs / 1000.0);
         runOnUiThread(() -> {
             progressBar.setProgress(percent);
-            progressText.setText("Progreso: " + percent + "% · " + formatBytes(sent) + " / " + formatBytes(total) + " · " + String.format(Locale.US, "%.1f MB/s", mbps));
+            progressText.setText(percent + "% · " + formatBytes(sent) + " / " + formatBytes(total) + " · " + String.format(Locale.US, "%.1f MB/s", mbps));
         });
     }
 
@@ -579,7 +676,10 @@ public class MainActivity extends Activity {
         long fileBytesWritten = 0;
         ProgressOutputStream(OutputStream out) { super(out); }
         void writeRaw(String s) throws IOException { out.write(s.getBytes("UTF-8")); }
-        void writeFile(byte[] b, int off, int len) throws IOException { out.write(b, off, len); fileBytesWritten += len; }
+        void writeFile(byte[] b, int off, int len) throws IOException {
+            out.write(b, off, len);
+            fileBytesWritten += len;
+        }
     }
 
     String readAll(InputStream in) throws Exception {
@@ -623,11 +723,10 @@ public class MainActivity extends Activity {
         return String.format(Locale.US, "%.1f %s", v, units[i]);
     }
 
-
     void addLocalHistory(String line) {
         String old = prefs.getString(KEY_LAST_HISTORY, "");
-        String entry = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(new java.util.Date()) + " · " + line;
-        String updated = entry + "\n" + old;
+        String entry = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(new java.util.Date()) + "\n" + line;
+        String updated = entry + "\n\n" + old;
         if (updated.length() > 4000) updated = updated.substring(0, 4000);
         prefs.edit().putString(KEY_LAST_HISTORY, updated).apply();
     }
@@ -635,7 +734,7 @@ public class MainActivity extends Activity {
     void showLocalHistory() {
         String hist = prefs.getString(KEY_LAST_HISTORY, "");
         if (hist.length() == 0) hist = "Todavía no hay envíos registrados.";
-        new android.app.AlertDialog.Builder(this)
+        new AlertDialog.Builder(this)
             .setTitle("Historial local")
             .setMessage(hist)
             .setPositiveButton("OK", null)
@@ -643,13 +742,14 @@ public class MainActivity extends Activity {
     }
 
     void showMessage(String title, String msg) {
-        new android.app.AlertDialog.Builder(this)
+        new AlertDialog.Builder(this)
             .setTitle(title)
             .setMessage(msg)
             .setPositiveButton("OK", null)
             .show();
     }
 
-    void toast(String m) { Toast.makeText(this, m, Toast.LENGTH_SHORT).show(); }
+    void toast(String m) {
+        Toast.makeText(this, m, Toast.LENGTH_SHORT).show();
+    }
 }
-

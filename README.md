@@ -1,25 +1,34 @@
-# TransferLAN+ v1.3.2-beta — Release Candidate
+# TransferLAN+ v1.4.0-beta — Experiencia Simple Android
 
 **Sin cuentas. Sin nube. Sin cables.**
 
-Versión enfocada en estabilidad para beta pública.
+Esta versión inicia el rediseño tipo AirDrop/LocalSend.
 
-## Incluye
+## Objetivo
 
-- Versiones sincronizadas en Windows/Android.
-- APK artifact actualizado a `TransferLANPlus-v1.3.2-beta-debug-apk`.
-- Documentación de prueba y release.
-- Mantiene:
-  - Windows portable.
-  - Android → Windows.
-  - PC conocida.
-  - Agregar PC por IP.
-  - Pegar código de PC.
-  - QR real visible en Windows.
-  - Historial.
-  - Confirmación de transferencia.
+Que Android deje de mostrar opciones técnicas como primera pantalla y pase a mostrar:
 
-## Limitaciones conocidas
+- Mis dispositivos.
+- PC conocida.
+- Enviar archivo.
+- Acciones secundarias abajo.
 
-- Discovery UDP puede fallar en hotspots.
-- Scanner QR interno queda pendiente; usar Cámara/Google Lens + Pegar código de PC.
+## Cambios
+
+- Nueva pantalla Android más simple.
+- Tarjeta principal de PC conocida.
+- Botón grande `Enviar archivo`.
+- `Buscar dispositivos`, `Pegar código de PC` y `Agregar por IP` quedan como opciones secundarias.
+- Se conserva:
+  - envío Android → Windows;
+  - progreso;
+  - historial local;
+  - PC conocida;
+  - agregar IP;
+  - pegar código;
+  - fallback de discovery.
+
+## Nota
+
+Esta es Fase 1 de v1.4.0: rediseño Android.
+La Fase 2 será rediseño Windows.

@@ -1,10 +1,9 @@
 # Changelog
 
-## v1.3.2-beta — Release Candidate
+## v1.4.0-beta
 
-- Sincroniza versión del proyecto.
-- Actualiza nombre del artifact Android.
-- Agrega documentación de release.
-- Mantiene QR real en Windows.
-- Mantiene fallback estable por código/IP.
-- Mantiene historial y confirmación.
+- Rediseña Android con experiencia simple.
+- Agrega pantalla "Mis dispositivos".
+- Muestra PC conocida como tarjeta principal.
+- Oculta opciones técnicas en sección secundaria.
+- Mantiene transferencia, historial, progreso y emparejamiento por código.

@@ -1,9 +1,8 @@
 # Changelog
 
-## v1.5.4-beta
+## v1.5.7-beta
 
-- Agrega persistencia básica de estado de transferencia.
-- MainActivity recupera el estado al abrir.
-- Mejora pantalla si hay transferencia en curso.
-- Mejora estados post-cierre: completado, fallido o cancelado.
-- Mantiene Service Status Bridge.
+- Agrega diagnóstico inteligente de conexión.
+- Mejora errores visibles de transferencia.
+- Traduce errores técnicos a soluciones simples.
+- Prepara botón `Diagnosticar conexión`.

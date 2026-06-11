@@ -22,6 +22,11 @@ public class TransferService extends Service {
     public static final String EXTRA_MESSAGE = "message";
     public static final String EXTRA_SENT = "sent";
     public static final String EXTRA_TOTAL = "total";
+    public static final String EXTRA_RESULT = "result";
+    public static final String EXTRA_SHA256 = "sha256";
+    public static final String EXTRA_SERVER_FILENAME = "server_filename";
+    public static final String EXTRA_SERVER_SIZE = "server_size";
+    public static final String EXTRA_SERVER_PATH = "server_path";
     public static final String STATUS_PREPARING = "preparing";
     public static final String STATUS_SENDING = "sending";
     public static final String STATUS_FINALIZING = "finalizing";
@@ -40,6 +45,11 @@ public class TransferService extends Service {
     static final String KEY_SENT="sent";
     static final String KEY_TOTAL="total";
     static final String KEY_TIME="time";
+    static final String KEY_RESULT="result";
+    static final String KEY_SHA256="sha256";
+    static final String KEY_SERVER_FILENAME="server_filename";
+    static final String KEY_SERVER_SIZE="server_size";
+    static final String KEY_SERVER_PATH="server_path";
 
     NotificationManager nm;
     PowerManager.WakeLock wakeLock;
@@ -49,6 +59,7 @@ public class TransferService extends Service {
     String currentFilename="";
     String currentTarget="";
     long currentTotal=0;
+    String lastServerResponse="";
 
     public void onCreate(){
         super.onCreate();
@@ -97,7 +108,7 @@ public class TransferService extends Service {
                 upload(fBase,uri,fName,fSize,start);
                 if(!cancelled) {
                     notifyNow("Transferencia completada",fName+" enviado correctamente",100,false);
-                    sendStatus(STATUS_COMPLETED, 100, "Transferencia completada", fSize, fSize);
+                    sendStatusWithResult(STATUS_COMPLETED, 100, "Windows confirmó recepción", fSize, fSize, lastServerResponse);
                 }
             }catch(Exception e){
                 if(cancelled) {
@@ -174,11 +185,14 @@ public class TransferService extends Service {
         notifyNow("Finalizando","Esperando confirmación de la PC",99,true);
         sendStatus(STATUS_FINALIZING, 99, "Esperando confirmación de la PC", total, total);
         int code=conn.getResponseCode();
-        if(code<200||code>299) throw new Exception("HTTP "+code);
+        if(code<200||code>299) {
+            String errBody = "";
+            try { errBody = readAll(conn.getErrorStream()); } catch(Exception ignored) {}
+            throw new Exception("HTTP " + code + (errBody.length() > 0 ? ": " + errBody : ""));
+        }
         try{
             InputStream r=conn.getInputStream();
-            byte[] d=new byte[1024];
-            while(r.read(d)!=-1){}
+            lastServerResponse = readAll(r);
             r.close();
         }catch(Exception ignored){}
         conn.disconnect();
@@ -213,6 +227,11 @@ public class TransferService extends Service {
                 .putLong(KEY_SENT, sent)
                 .putLong(KEY_TOTAL, total)
                 .putLong(KEY_TIME, System.currentTimeMillis())
+                .putString(KEY_RESULT, "")
+                .putString(KEY_SHA256, "")
+                .putString(KEY_SERVER_FILENAME, "")
+                .putLong(KEY_SERVER_SIZE, 0)
+                .putString(KEY_SERVER_PATH, "")
                 .apply();
 
             Intent i = new Intent(ACTION_STATUS);

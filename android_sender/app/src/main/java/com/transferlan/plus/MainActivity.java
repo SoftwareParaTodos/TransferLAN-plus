@@ -349,7 +349,13 @@ public class MainActivity extends Activity {
             } else if (TransferService.STATUS_COMPLETED.equals(st)) {
                 progressBar.setProgress(100);
                 progressText.setText("Última transferencia completada.");
-                transferDiagnosticText.setText("✓ Última transferencia completada\nArchivo: " + filename + "\nDestino: " + target);
+                String sha = state.getString("sha256", "");
+                String serverName = state.getString("server_filename", "");
+                long serverSize = state.getLong("server_size", 0);
+                String detail = "✓ Última transferencia confirmada por Windows\nArchivo: " + (serverName.length() > 0 ? serverName : filename) + "\nDestino: " + target;
+                if (serverSize > 0) detail += "\nTamaño recibido: " + formatBytes(serverSize);
+                if (sha.length() > 0) detail += "\nSHA-256: " + sha;
+                transferDiagnosticText.setText(detail);
                 cancelTransferButton.setVisibility(View.GONE);
                 retryButton.setVisibility(View.GONE);
                 status.setText("Última transferencia completada.");
@@ -394,11 +400,20 @@ public class MainActivity extends Activity {
         } else if (TransferService.STATUS_COMPLETED.equals(st)) {
             progressBar.setProgress(100);
             progressText.setText("Transferencia completada.");
-            transferDiagnosticText.setText("✓ Archivo recibido por la PC");
+            String sha = intent.getStringExtra(TransferService.EXTRA_SHA256);
+            String serverName = intent.getStringExtra(TransferService.EXTRA_SERVER_FILENAME);
+            long serverSize = intent.getLongExtra(TransferService.EXTRA_SERVER_SIZE, 0);
+            String serverPath = intent.getStringExtra(TransferService.EXTRA_SERVER_PATH);
+            String detail = "✓ Windows confirmó recepción";
+            if (serverName != null && serverName.length() > 0) detail += "\nArchivo: " + serverName;
+            if (serverSize > 0) detail += "\nTamaño recibido: " + formatBytes(serverSize);
+            if (sha != null && sha.length() > 0) detail += "\nSHA-256: " + sha;
+            if (serverPath != null && serverPath.length() > 0) detail += "\nGuardado en: " + serverPath;
+            transferDiagnosticText.setText(detail);
             cancelTransferButton.setVisibility(View.GONE);
             retryButton.setVisibility(View.GONE);
-            status.setText("Archivo enviado correctamente.");
-            addLocalHistory("✓ Transferencia completada en segundo plano");
+            status.setText("Windows confirmó la recepción.");
+            addLocalHistory("✓ Windows confirmó recepción\n" + detail);
         } else if (TransferService.STATUS_CANCELLED.equals(st)) {
             progressText.setText("Transferencia cancelada.");
             transferDiagnosticText.setText("La transferencia fue cancelada.");

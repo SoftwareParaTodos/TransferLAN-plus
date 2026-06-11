@@ -1,0 +1,44 @@
+name: Build Windows Portable
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "core/server/**"
+      - "Windows/**"
+      - ".github/workflows/build-windows-portable.yml"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Build Windows EXE
+        working-directory: core/server
+        run: |
+          go mod tidy
+          go build -o TransferLAN+.exe
+
+      - name: Prepare portable folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/TransferLAN-plus-Windows
+          Copy-Item core/server/TransferLAN+.exe dist/TransferLAN-plus-Windows/
+          Copy-Item Windows/* dist/TransferLAN-plus-Windows/ -Recurse -Force
+          New-Item -ItemType Directory -Force dist/TransferLAN-plus-Windows/downloads
+
+      - name: Upload Windows portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: TransferLANPlus-v1.5.9-beta-windows-portable
+          path: dist/TransferLAN-plus-Windows/

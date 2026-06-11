@@ -1,9 +1,10 @@
 # Changelog
 
-## v1.2.5-beta
+## v1.3.2-beta — Release Candidate
 
-- Corrige build Android quitando dependencia inestable del scanner QR.
-- Agrega QR real en Windows con `github.com/skip2/go-qrcode`.
-- Mantiene emparejamiento por código `transferlan://connect?...`.
-- Mantiene `Pegar código de PC` en Android.
+- Sincroniza versión del proyecto.
+- Actualiza nombre del artifact Android.
+- Agrega documentación de release.
+- Mantiene QR real en Windows.
+- Mantiene fallback estable por código/IP.
 - Mantiene historial y confirmación.

@@ -1,8 +1,9 @@
 # Changelog
 
-## v1.5.7-beta
+## v1.5.9-beta
 
-- Agrega diagnóstico inteligente de conexión.
-- Mejora errores visibles de transferencia.
-- Traduce errores técnicos a soluciones simples.
-- Prepara botón `Diagnosticar conexión`.
+- Prepara auto-reconexión por `device_id`.
+- Agrega escaneo inteligente de red para PC conocida.
+- Actualiza IP guardada si se encuentra la misma PC.
+- Mejora mensajes de búsqueda.
+- Mantiene transferencia en servicio.

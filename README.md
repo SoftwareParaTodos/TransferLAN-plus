@@ -1,34 +1,26 @@
-# TransferLAN+ v1.4.0-beta — Experiencia Simple Android
+# TransferLAN+ v1.5.1-beta — Foreground Service Foundation
 
 **Sin cuentas. Sin nube. Sin cables.**
 
-Esta versión inicia el rediseño tipo AirDrop/LocalSend.
+Esta versión prepara la arquitectura real para transferencias en segundo plano.
 
-## Objetivo
+## Cambios principales
 
-Que Android deje de mostrar opciones técnicas como primera pantalla y pase a mostrar:
+- Agrega `TransferService.java`.
+- Declara Foreground Service en AndroidManifest.
+- Agrega permiso `FOREGROUND_SERVICE`.
+- Agrega permiso `WAKE_LOCK`.
+- Agrega notificación persistente de transferencia.
+- Agrega acción de cancelación preparada.
+- Mantiene el flujo actual de envío funcionando.
+- Mantiene notificación de progreso desde Activity.
+- Deja el proyecto listo para migrar el upload completo al servicio en la próxima fase.
 
-- Mis dispositivos.
-- PC conocida.
-- Enviar archivo.
-- Acciones secundarias abajo.
+## Importante
 
-## Cambios
+Esta es una versión de transición segura:
+- no rompe el envío actual;
+- agrega la base del servicio;
+- evita hacer un cambio gigante de golpe.
 
-- Nueva pantalla Android más simple.
-- Tarjeta principal de PC conocida.
-- Botón grande `Enviar archivo`.
-- `Buscar dispositivos`, `Pegar código de PC` y `Agregar por IP` quedan como opciones secundarias.
-- Se conserva:
-  - envío Android → Windows;
-  - progreso;
-  - historial local;
-  - PC conocida;
-  - agregar IP;
-  - pegar código;
-  - fallback de discovery.
-
-## Nota
-
-Esta es Fase 1 de v1.4.0: rediseño Android.
-La Fase 2 será rediseño Windows.
+La próxima versión moverá definitivamente el upload pesado desde `MainActivity` hacia `TransferService`.

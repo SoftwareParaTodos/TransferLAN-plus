@@ -1,9 +1,12 @@
 # Changelog
 
-## v1.4.0-beta
+## v1.5.1-beta
 
-- Rediseña Android con experiencia simple.
-- Agrega pantalla "Mis dispositivos".
-- Muestra PC conocida como tarjeta principal.
-- Oculta opciones técnicas en sección secundaria.
-- Mantiene transferencia, historial, progreso y emparejamiento por código.
+- Agrega base de ForegroundService para transferencias largas.
+- Agrega `TransferService.java`.
+- Agrega permisos Android:
+  - `FOREGROUND_SERVICE`
+  - `WAKE_LOCK`
+- Agrega notificación persistente/cancelable preparada.
+- Mantiene compatibilidad con v1.5.0.
+- Prepara migración completa del upload al servicio.

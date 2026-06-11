@@ -2,7 +2,11 @@ package com.transferlan.plus;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.os.Bundle;
+import android.os.Build;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
@@ -11,11 +15,14 @@ import android.provider.OpenableColumns;
 import android.database.Cursor;
 import android.view.View;
 import android.view.Gravity;
+import android.view.WindowManager;
 import android.widget.*;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.content.Context;
+import android.Manifest;
+import android.content.pm.PackageManager;
 
 import java.io.*;
 import java.net.*;
@@ -29,12 +36,17 @@ public class MainActivity extends Activity {
     static final String KEY_LAST_BASE = "last_base_url";
     static final String KEY_LAST_NAME = "last_device_name";
     static final String KEY_LAST_HISTORY = "last_history";
+    static final String TRANSFER_CHANNEL_ID = "transferlan_transfer";
+    static final int NOTIFICATION_ID_TRANSFER = 5050;
+    static final int REQ_NOTIFICATIONS = 5051;
 
     TextView status;
     TextView deviceCard;
     TextView selectedFileText;
     TextView progressText;
+    TextView transferDiagnosticText;
     ProgressBar progressBar;
+    Button retryButton;
     LinearLayout foundDevicesBox;
     LinearLayout secondaryActionsBox;
 
@@ -44,13 +56,18 @@ public class MainActivity extends Activity {
     String selectedDeviceName = "";
 
     SharedPreferences prefs;
+    NotificationManager notificationManager;
     WifiManager.MulticastLock multicastLock;
     Set<String> seenDeviceCards = new HashSet<>();
+    boolean isSending = false;
+    long lastUiProgressUpdate = 0;
 
     @Override
     public void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        setupNotifications();
+        requestNotificationPermissionIfNeeded();
         buildUi();
         handleIntent(getIntent());
         autoConnectLastDevice();
@@ -120,6 +137,14 @@ public class MainActivity extends Activity {
 
         progressText = text("Listo para enviar.", 14, 148,163,184, false);
         root.addView(progressText);
+
+        transferDiagnosticText = cardText("Transferencia: sin archivo en curso");
+        root.addView(transferDiagnosticText);
+
+        retryButton = secondaryButton("Reintentar envío");
+        retryButton.setVisibility(View.GONE);
+        retryButton.setOnClickListener(v -> sendFile());
+        root.addView(retryButton);
 
         status = text("Iniciando...", 15, 229,231,235, false);
         status.setPadding(0, 14, 0, 16);
@@ -399,6 +424,8 @@ public class MainActivity extends Activity {
         selectedFileText.setText("Archivo: " + fileName(u) + " (" + formatBytes(selectedSize) + ")");
         progressBar.setProgress(0);
         progressText.setText("Archivo listo. Tocá Enviar archivo para comenzar.");
+        retryButton.setVisibility(View.GONE);
+        transferDiagnosticText.setText("Archivo listo:\n" + fileName(u) + "\nTamaño: " + formatBytes(selectedSize));
         if (selectedBaseUrl.length() > 0 || prefs.getString(KEY_LAST_BASE, "").length() > 0) {
             sendFile();
         }
@@ -583,7 +610,13 @@ public class MainActivity extends Activity {
         if (req == PICK && res == RESULT_OK && data != null) setSelectedFile(data.getData());
     }
 
+
     void sendFile() {
+        if (isSending) {
+            toast("Ya hay una transferencia en curso.");
+            return;
+        }
+
         if (selected == null) {
             pickFile();
             return;
@@ -599,8 +632,17 @@ public class MainActivity extends Activity {
 
         final String finalBase = trimSlash(base);
         progressBar.setProgress(0);
+        retryButton.setVisibility(View.GONE);
         progressText.setText("Preparando envío...");
-        status.setText("Enviando a " + (selectedDeviceName.length() > 0 ? selectedDeviceName : "la PC") + "...");
+        String targetName = selectedDeviceName.length() > 0 ? selectedDeviceName : prefs.getString(KEY_LAST_NAME, "la PC");
+        transferDiagnosticText.setText("Preparando transferencia:\nDestino: " + targetName + "\nArchivo: " + fileName(selected) + "\nTamaño: " + formatBytes(selectedSize));
+        status.setText("Enviando a " + targetName + "...");
+
+        isSending = true;
+        lastUiProgressUpdate = 0;
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        showTransferNotification("Preparando envío", fileName(selected), 0, true);
+        startTransferServiceFoundation(fileName(selected), selectedDeviceName.length() > 0 ? selectedDeviceName : "PC");
 
         new Thread(() -> {
             long start = System.currentTimeMillis();
@@ -610,9 +652,15 @@ public class MainActivity extends Activity {
                 double avg = selectedSize / 1024.0 / 1024.0 / (elapsed / 1000.0);
                 final String summary = "✓ Archivo enviado\n" + fileName(selected) + "\n" + formatBytes(selectedSize) + " · " + String.format(Locale.US, "%.1f MB/s", avg);
                 runOnUiThread(() -> {
+                    isSending = false;
+                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    showTransferNotification("Transferencia completada", fileName(selected), 100, false);
+                    stopTransferServiceFoundation();
                     progressBar.setProgress(100);
                     progressText.setText("Transferencia completada.");
+                    transferDiagnosticText.setText("✓ Transferencia confirmada por la PC\n" + fileName(selected) + "\n" + formatBytes(selectedSize));
                     status.setText("Archivo enviado correctamente.");
+                    retryButton.setVisibility(View.GONE);
                     addLocalHistory(summary);
                     showMessage("Transferencia completada", summary);
                     selected = null;
@@ -620,47 +668,83 @@ public class MainActivity extends Activity {
                     selectedFileText.setText("Archivo: ninguno seleccionado");
                 });
             } catch(Exception e) {
-                runOnUiThread(() -> status.setText("Error enviando: " + e.getMessage()));
+                final String error = e.getMessage() == null ? "Error desconocido" : e.getMessage();
+                runOnUiThread(() -> {
+                    isSending = false;
+                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    showTransferNotification("Transferencia interrumpida", "Podés reintentar el envío", 0, false);
+                    stopTransferServiceFoundation();
+                    status.setText("No se pudo completar el envío: " + error);
+                    progressText.setText("Transferencia interrumpida. Podés reintentar.");
+                    transferDiagnosticText.setText("⚠ Transferencia fallida\nArchivo conservado: " + fileName(selected) + "\nTamaño: " + formatBytes(selectedSize) + "\nMotivo: " + error);
+                    retryButton.setVisibility(View.VISIBLE);
+                    toast("No se pudo enviar. Podés reintentar.");
+                });
             }
         }).start();
     }
+
 
     void upload(String base, Uri uri, long startTime) throws Exception {
         String boundary = "TransferLANBoundary" + System.currentTimeMillis();
         HttpURLConnection c = (HttpURLConnection)new URL(base + "/transfer/upload").openConnection();
         c.setRequestMethod("POST");
         c.setDoOutput(true);
+        c.setConnectTimeout(15000);
+        c.setReadTimeout(0);
+        c.setChunkedStreamingMode(1024 * 128);
+        c.setRequestProperty("Connection", "close");
         c.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
 
         InputStream in = getContentResolver().openInputStream(uri);
         if (in == null) throw new Exception("No se pudo abrir archivo");
 
-        ProgressOutputStream out = new ProgressOutputStream(c.getOutputStream());
-        String fn = fileName(uri);
+        ProgressOutputStream out = null;
+        try {
+            out = new ProgressOutputStream(new BufferedOutputStream(c.getOutputStream(), 1024 * 64));
+            String fn = fileName(uri);
 
-        out.writeRaw("--" + boundary + "\r\n");
-        out.writeRaw("Content-Disposition: form-data; name=\"file\"; filename=\"" + fn + "\"\r\n");
-        out.writeRaw("Content-Type: application/octet-stream\r\n\r\n");
+            out.writeRaw("--" + boundary + "\r\n");
+            out.writeRaw("Content-Disposition: form-data; name=\"file\"; filename=\"" + fn + "\"\r\n");
+            out.writeRaw("Content-Type: application/octet-stream\r\n\r\n");
 
-        byte[] buf = new byte[1024 * 256];
-        int n;
+            byte[] buf = new byte[1024 * 64];
+            int n;
 
-        while ((n = in.read(buf)) > 0) {
-            out.writeFile(buf, 0, n);
-            updateProgress(out.fileBytesWritten, selectedSize, Math.max(1, System.currentTimeMillis() - startTime));
+            while ((n = in.read(buf)) > 0) {
+                out.writeFile(buf, 0, n);
+
+                long now = System.currentTimeMillis();
+                if (now - lastUiProgressUpdate > 350) {
+                    lastUiProgressUpdate = now;
+                    updateProgress(out.fileBytesWritten, selectedSize, Math.max(1, now - startTime));
+                }
+            }
+
+            out.writeRaw("\r\n--" + boundary + "--\r\n");
+            out.flush();
+        } finally {
+            try { in.close(); } catch(Exception ignored) {}
+            try { if (out != null) out.close(); } catch(Exception ignored) {}
         }
-
-        in.close();
-        out.writeRaw("\r\n--" + boundary + "--\r\n");
-        out.close();
 
         runOnUiThread(() -> {
             progressBar.setProgress(99);
             progressText.setText("Finalizando... esperando confirmación de la PC");
+            transferDiagnosticText.setText("Finalizando transferencia...\nEsperando confirmación de Windows.");
+            showTransferNotification("Finalizando", "Esperando confirmación de la PC", 99, true);
         });
 
         int code = c.getResponseCode();
         if (code < 200 || code > 299) throw new Exception("HTTP " + code);
+
+        try {
+            InputStream response = c.getInputStream();
+            while (response.read(new byte[1024]) != -1) {}
+            response.close();
+        } catch(Exception ignored) {}
+
+        c.disconnect();
     }
 
     void updateProgress(long sent, long total, long elapsedMs) {
@@ -669,6 +753,7 @@ public class MainActivity extends Activity {
         runOnUiThread(() -> {
             progressBar.setProgress(percent);
             progressText.setText(percent + "% · " + formatBytes(sent) + " / " + formatBytes(total) + " · " + String.format(Locale.US, "%.1f MB/s", mbps));
+            showTransferNotification("Enviando archivo", percent + "% · " + formatBytes(sent) + " / " + formatBytes(total), percent, true);
         });
     }
 
@@ -747,6 +832,80 @@ public class MainActivity extends Activity {
             .setMessage(msg)
             .setPositiveButton("OK", null)
             .show();
+    }
+
+
+
+    void startTransferServiceFoundation(String filename, String target) {
+        try {
+            Intent i = new Intent(this, TransferService.class);
+            i.setAction(TransferService.ACTION_START);
+            i.putExtra(TransferService.EXTRA_FILENAME, filename);
+            i.putExtra(TransferService.EXTRA_TARGET, target);
+            if (Build.VERSION.SDK_INT >= 26) {
+                startForegroundService(i);
+            } else {
+                startService(i);
+            }
+        } catch(Exception ignored) {}
+    }
+
+    void stopTransferServiceFoundation() {
+        try {
+            Intent i = new Intent(this, TransferService.class);
+            i.setAction(TransferService.ACTION_CANCEL);
+            startService(i);
+        } catch(Exception ignored) {}
+    }
+
+    void setupNotifications() {
+        notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= 26 && notificationManager != null) {
+            NotificationChannel channel = new NotificationChannel(
+                TRANSFER_CHANNEL_ID,
+                "Transferencias",
+                NotificationManager.IMPORTANCE_LOW
+            );
+            channel.setDescription("Progreso de transferencias TransferLAN+");
+            notificationManager.createNotificationChannel(channel);
+        }
+    }
+
+    void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            try {
+                if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFICATIONS);
+                }
+            } catch(Exception ignored) {}
+        }
+    }
+
+    void showTransferNotification(String title, String message, int progress, boolean ongoing) {
+        try {
+            if (notificationManager == null) return;
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                return;
+            }
+
+            Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(this, TRANSFER_CHANNEL_ID)
+                : new Notification.Builder(this);
+
+            builder.setSmallIcon(android.R.drawable.stat_sys_upload)
+                .setContentTitle("TransferLAN+ · " + title)
+                .setContentText(message)
+                .setOngoing(ongoing)
+                .setOnlyAlertOnce(true);
+
+            if (ongoing) {
+                builder.setProgress(100, Math.max(0, Math.min(100, progress)), false);
+            } else {
+                builder.setProgress(0, 0, false);
+            }
+
+            notificationManager.notify(NOTIFICATION_ID_TRANSFER, builder.build());
+        } catch(Exception ignored) {}
     }
 
     void toast(String m) {

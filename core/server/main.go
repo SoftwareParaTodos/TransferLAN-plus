@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net"
@@ -15,8 +16,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"time"
-
-	qrcode "github.com/skip2/go-qrcode"
 )
 
 const version = "v1.5.9-beta"
@@ -55,7 +54,7 @@ func main() {
 	http.HandleFunc("/network/info", networkInfoHandler)
 	http.HandleFunc("/pairing/info", pairingInfoHandler)
 	http.HandleFunc("/pairing/code", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, pairingURL()) })
-	http.HandleFunc("/pairing/qr.png", pairingQRPNGHandler)
+	http.HandleFunc("/pairing/qr.png", pairingImageHandler)
 	http.HandleFunc("/history", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, map[string]any{"items": readHistory()}) })
 	http.HandleFunc("/transfer/upload", uploadHandler)
 	http.Handle("/downloads/", http.StripPrefix("/downloads/", http.FileServer(http.Dir("downloads"))))
@@ -95,7 +94,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 <style>body{font-family:system-ui;background:#020617;color:#e5e7eb;padding:24px}.card{max-width:980px;margin:auto;background:#0f172a;border:1px solid #334155;border-radius:28px;padding:28px}h1{text-align:center;font-size:42px}.tag{text-align:center;color:#38bdf8;font-weight:900}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.box{background:#111827;border:1px solid #334155;border-radius:20px;padding:18px}code,pre,textarea{background:#020617;color:#dbeafe;padding:12px;border-radius:12px;display:block;word-break:break-all;width:100%%;box-sizing:border-box}button{background:#38bdf8;color:#00111f;border:0;border-radius:14px;padding:12px 18px;font-weight:900}.qr{display:block;margin:auto;background:white;border-radius:18px;padding:12px;max-width:260px;width:100%%}.ok{color:#22c55e;font-weight:900}a{color:#38bdf8}</style></head>
 <body><div class="card"><h1>TransferLAN+</h1><div class="tag">Sin cuentas. Sin nube. Sin cables.</div><div class="grid">
 <div class="box"><h2>Estado</h2><p class="ok">Servidor activo</p><p>Versión</p><code>%s</code><p>Equipo</p><code>%s</code><p>Device ID</p><code>%s</code><p>Android</p><code>%s</code></div>
-<div class="box"><h2>QR</h2><img class="qr" src="/pairing/qr.png"></div>
+<div class="box"><h2>Emparejamiento</h2><img class="qr" src="/pairing/qr.png"><p>Usá el código alternativo en Android.</p></div>
 <div class="box"><h2>Código</h2><textarea id="pair" rows="5">%s</textarea><button onclick="copyPair()">Copiar</button></div>
 <div class="box"><h2>Descargas</h2><a href="/downloads/" target="_blank">Ver carpeta</a></div>
 <div class="box"><h2>Historial</h2><button onclick="loadHistory()">Actualizar</button><pre id="hist">Cargando...</pre></div>
@@ -108,14 +107,19 @@ loadHistory()
 </script></body></html>`, version, info.Name, info.DeviceID, info.BaseURL, pair)
 }
 
-func pairingQRPNGHandler(w http.ResponseWriter, r *http.Request) {
-	png, err := qrcode.Encode(pairingURL(), qrcode.Medium, 512)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	w.Header().Set("Content-Type", "image/png")
-	_, _ = w.Write(png)
+func pairingImageHandler(w http.ResponseWriter, r *http.Request) {
+	info := deviceInfo()
+	code := html.EscapeString("TRANSFERLAN+ " + info.Name + " " + info.BaseURL)
+	w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
+	fmt.Fprintf(w, `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<rect width="512" height="512" rx="48" fill="#ffffff"/>
+<rect x="40" y="40" width="432" height="432" rx="28" fill="#f8fafc" stroke="#020617" stroke-width="8"/>
+<text x="256" y="170" text-anchor="middle" font-family="Arial" font-size="38" font-weight="700" fill="#020617">TransferLAN+</text>
+<text x="256" y="225" text-anchor="middle" font-family="Arial" font-size="22" fill="#0f172a">Emparejamiento</text>
+<text x="256" y="280" text-anchor="middle" font-family="Arial" font-size="20" fill="#0f172a">%s</text>
+<text x="256" y="330" text-anchor="middle" font-family="Arial" font-size="16" fill="#334155">Copiá el código alternativo</text>
+<text x="256" y="360" text-anchor="middle" font-family="Arial" font-size="13" fill="#475569">%s</text>
+</svg>`, html.EscapeString(info.Name), code)
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {

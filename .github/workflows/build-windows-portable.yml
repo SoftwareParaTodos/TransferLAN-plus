@@ -5,7 +5,8 @@ on:
   push:
     branches: [ main ]
     paths:
-      - "core/server/**"
+      - "core/server/main.go"
+      - "core/server/go.mod"
       - "Windows/**"
       - ".github/workflows/build-windows-portable.yml"
 
@@ -24,14 +25,13 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-          cache-dependency-path: core/server/go.mod
+          cache: false
 
       - name: Build Windows EXE
         working-directory: core/server
         shell: pwsh
         run: |
-          go mod tidy
-          go build -o TransferLAN+.exe .
+          go build -o TransferLAN+.exe main.go
 
       - name: Prepare portable folder
         shell: pwsh
@@ -39,7 +39,24 @@ jobs:
           New-Item -ItemType Directory -Force dist/TransferLAN-plus-Windows | Out-Null
           New-Item -ItemType Directory -Force dist/TransferLAN-plus-Windows/downloads | Out-Null
           Copy-Item core/server/TransferLAN+.exe dist/TransferLAN-plus-Windows/ -Force
-          if (Test-Path Windows) { Copy-Item Windows/* dist/TransferLAN-plus-Windows/ -Recurse -Force }
+
+          if (Test-Path Windows) {
+            Copy-Item Windows/* dist/TransferLAN-plus-Windows/ -Recurse -Force
+          }
+
+          if (-not (Test-Path dist/TransferLAN-plus-Windows/INICIAR_TRANSFERLAN.bat)) {
+            @"
+@echo off
+title TransferLAN+
+echo Iniciando TransferLAN+...
+echo.
+echo Abrir en la PC:
+echo http://localhost:5050
+echo.
+TransferLAN+.exe
+pause
+"@ | Out-File -Encoding ASCII dist/TransferLAN-plus-Windows/INICIAR_TRANSFERLAN.bat
+          }
 
       - name: Upload Windows portable
         uses: actions/upload-artifact@v4
